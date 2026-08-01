@@ -389,3 +389,71 @@ input:focus, textarea:focus, select:focus{ outline: 2px solid var(--blue); outli
   .titleblock__main{ border-right:none; border-bottom: 2px solid var(--ink); }
   .titleblock__meta{ flex-direction: row; flex-wrap: wrap; }
 }
+
+/* ---------- dashboard: grilla de formularios ---------- */
+.forms-grid{
+  display:grid; grid-template-columns: repeat(auto-fill, minmax(240px,1fr)); gap:16px;
+}
+.form-card{
+  background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius);
+  box-shadow: var(--shadow); padding: 16px; display:flex; flex-direction:column; gap:8px;
+  cursor:pointer; transition: transform .1s ease, box-shadow .15s ease;
+}
+.form-card:hover{ transform: translateY(-2px); box-shadow: 0 4px 10px rgba(20,35,43,.1), 0 14px 28px rgba(20,35,43,.08); }
+.form-card__tick{ font-family: var(--font-mono); font-size:10px; color:var(--blue); }
+.form-card__title{ font-family: var(--font-display); font-weight:600; font-size:17px; line-height:1.2; }
+.form-card__meta{ font-size:12px; color:var(--muted); display:flex; gap:10px; flex-wrap:wrap; }
+.form-card__actions{ display:flex; gap:6px; margin-top:auto; padding-top:8px; }
+.new-form-card{
+  border: 2px dashed var(--line-strong); border-radius: var(--radius);
+  display:flex; align-items:center; justify-content:center; min-height: 130px;
+  color: var(--muted); font-family: var(--font-mono); font-size:13px; cursor:pointer; background:transparent;
+}
+.new-form-card:hover{ border-color: var(--blue); color: var(--blue); }
+
+/* ---------- config chips (comisiones, tiempo) ---------- */
+.chips{ display:flex; flex-wrap:wrap; gap:6px; }
+.chip{
+  display:flex; align-items:center; gap:6px;
+  background: var(--blue-soft); color: var(--blue); border:1px solid #c7dde3;
+  border-radius: 20px; padding: 3px 8px 3px 10px; font-family: var(--font-mono); font-size:12px;
+}
+.chip button{ border:none; background:transparent; color:var(--blue); cursor:pointer; }
+
+/* ---------- temporizador / avisos en take.html ---------- */
+.timer-badge{
+  position: sticky; top: 10px; z-index: 20;
+  display:inline-flex; align-items:center; gap:8px;
+  background: var(--ink); color:#fff; font-family: var(--font-mono);
+  padding: 8px 14px; border-radius: var(--radius); font-size: 14px;
+  box-shadow: var(--shadow); float:right;
+}
+.timer-badge.warn{ background: var(--accent); }
+.warn-banner{
+  background: var(--accent-soft); border: 1px solid var(--accent);
+  color: #7a2c08; border-radius: var(--radius); padding: 10px 14px;
+  font-size: 13px; margin-bottom: 14px;
+}
+.watermark-layer{
+  position: fixed; inset:0; pointer-events:none; z-index: 5;
+  display:flex; flex-wrap:wrap; align-content:space-around; justify-content:space-around;
+  opacity:.09; transform: rotate(-18deg) scale(1.3); overflow:hidden;
+}
+.watermark-layer span{
+  font-family: var(--font-mono); font-size: 13px; color: var(--ink); white-space:nowrap; margin: 18px;
+}
+
+/* ---------- resultados ---------- */
+.results-toolbar{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:16px; }
+.results-toolbar select, .results-toolbar input{
+  border:1px solid var(--line-strong); border-radius:2px; padding:8px 10px; font-size:13px; font-family: var(--font-body);
+}
+table.results-table{ width:100%; border-collapse: collapse; background:#fff; box-shadow: var(--shadow); }
+table.results-table th, table.results-table td{
+  border-bottom: 1px solid var(--line); padding: 9px 12px; font-size: 13px; text-align:left;
+}
+table.results-table th{ background: var(--blue-soft); font-family: var(--font-mono); font-size:11px; text-transform:uppercase; color:var(--blue); }
+table.results-table tr:hover td{ background: #fafcfb; }
+.score-pill{ font-family: var(--font-mono); padding:2px 8px; border-radius:20px; font-size:12px; }
+.score-pill.high{ background: var(--good-soft); color: var(--good); }
+.score-pill.low{ background: var(--accent-soft); color: var(--accent); }

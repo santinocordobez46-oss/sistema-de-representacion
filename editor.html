@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Editor de parcialito</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<div class="titleblock">
+  <div class="titleblock__main">
+    <p class="titleblock__eyebrow"><a href="index.html" style="color:var(--blue); text-decoration:none;">← Mis parcialitos</a></p>
+    <h1 class="titleblock__title" id="tb-title">Cargando…</h1>
+  </div>
+  <div class="titleblock__meta">
+    <div><b id="tb-count">0</b>preguntas</div>
+    <div><b id="tb-points">0 pts</b>puntaje total</div>
+    <div><span id="tb-subtitle"></span></div>
+  </div>
+</div>
+
+<nav class="ruler-tabs">
+  <button class="active" data-view="view-editor">01 · Editor</button>
+  <button data-view="view-take">02 · Vista previa</button>
+  <button data-view="view-publish">03 · Publicar / QR</button>
+</nav>
+
+<div class="app">
+
+  <!-- ============ EDITOR ============ -->
+  <section id="view-editor" class="view active">
+    <div class="toolbar">
+      <span class="hint">Los cambios se guardan solos, no hace falta ningún botón de "Guardar".</span>
+      <button class="btn" id="btn-load-example">Reemplazar por el ejemplo del profe</button>
+    </div>
+
+    <div class="section-card" style="margin-bottom:22px;">
+      <div class="section-card__head" style="background:var(--accent-soft);">
+        <span class="section-tick" style="border-color:var(--accent); color:var(--accent);">TÍTULO Y CONFIGURACIÓN</span>
+      </div>
+      <div class="section-card__body">
+        <label class="field-label">Título del parcialito</label>
+        <input type="text" id="form-title">
+        <label class="field-label">Subtítulo / tema</label>
+        <input type="text" id="form-subtitle">
+
+        <label class="field-label">Comisiones (un mismo QR sirve para todas — el alumno elige la suya al empezar)</label>
+        <div class="tag-input" id="comisiones-input"></div>
+
+        <label class="field-label">Tiempo límite para responder (minutos, opcional)</label>
+        <input type="number" id="form-timelimit" min="1" placeholder="Sin límite de tiempo" style="max-width:180px;">
+      </div>
+    </div>
+
+    <div id="builder-sections"></div>
+  </section>
+
+  <!-- ============ VISTA PREVIA ============ -->
+  <section id="view-take" class="view">
+    <div class="toolbar">
+      <span class="hint">Así lo ve el alumno. Probá la corrección antes de publicar (acá no se guarda nada en la planilla).</span>
+    </div>
+    <div id="take-root"></div>
+  </section>
+
+  <!-- ============ PUBLICAR ============ -->
+  <section id="view-publish" class="view">
+    <div class="toolbar">
+      <span class="hint">Conectá la planilla de Google Sheets una vez, y de ahí en más este QR/link ya guarda respuestas y bloquea reingresos.</span>
+    </div>
+
+    <div class="export-card" style="margin-bottom:20px;">
+      <h3>1) Conectar la planilla de respuestas (Google Sheets)</h3>
+      <p style="font-size:13px;color:var(--muted);">Instrucciones completas en <code>docs/apps-script.gs</code> del proyecto. Una vez implementada, pegá acá la URL que termina en <code>/exec</code>.</p>
+      <label class="field-label">URL de Google Apps Script (/exec)</label>
+      <input type="text" id="form-sheeturl" placeholder="https://script.google.com/macros/s/AAAA.../exec">
+      <label class="field-label">Enlace directo a la planilla (opcional, para abrirla rápido desde acá)</label>
+      <input type="text" id="form-sheetviewurl" placeholder="https://docs.google.com/spreadsheets/d/...">
+    </div>
+
+    <div class="export-grid">
+      <div class="export-card">
+        <h3>2) Enlace y QR para proyectar</h3>
+        <p style="font-size:13px; color:var(--muted);">Un solo QR para las tres comisiones: el alumno elige la suya al entrar. Bloqueado a una sola respuesta por N° de alumno + comisión.</p>
+        <div id="qrcode-box"></div>
+        <label class="field-label">Enlace</label>
+        <div style="display:flex; gap:8px;">
+          <input type="text" id="share-url" readonly>
+          <button class="btn btn-small" id="btn-copy-link">Copiar</button>
+        </div>
+      </div>
+      <div class="export-card">
+        <h3>3) Descargar / hacer una copia</h3>
+        <p style="font-size:13px; color:var(--muted);">Guardalo como <code>.json</code> para tener respaldo, duplicarlo o moverlo a otra computadora (usá "Importar" en el panel principal).</p>
+        <button class="btn btn-primary" id="btn-download-json">⬇ Descargar .json</button>
+        <label class="field-label" style="margin-top:16px;">Ver resultados</label>
+        <button class="btn" id="btn-go-results">Abrir panel de resultados →</button>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="assets/common.js"></script>
+<script src="assets/editor.js"></script>
+</body>
+</html>

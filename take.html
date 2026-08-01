@@ -3,16 +3,21 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Rendir cuestionario</title>
+<title>Rendir parcialito</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/style.css">
+<style>
+  body{ -webkit-user-select:none; user-select:none; } /* disuade copiar texto, no bloquea capturas */
+</style>
 </head>
-<body>
+<body oncontextmenu="return false;">
+
+<div class="watermark-layer" id="watermark"></div>
 
 <div class="titleblock">
   <div class="titleblock__main">
-    <p class="titleblock__eyebrow">Rendir cuestionario</p>
+    <p class="titleblock__eyebrow">Rendir parcialito</p>
     <h1 class="titleblock__title" id="tb-title">Cargando…</h1>
   </div>
   <div class="titleblock__meta">
@@ -23,80 +28,155 @@
 </div>
 
 <div class="app">
-  <div id="take-root"></div>
+  <div id="identity-root"></div>
+  <div id="take-root" style="display:none;"></div>
 </div>
 
+<script src="assets/common.js"></script>
 <script>
-/* ---------- carga el formulario desde el hash del enlace (?#....) ---------- */
-function normalizeText(s){
-  return String(s||"").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
-}
-function normalizeNumber(s){
-  const cleaned = String(s||"").trim().replace(",", ".");
-  const n = parseFloat(cleaned);
-  return Number.isNaN(n) ? null : n;
-}
-
-let state = null;
+let form = null;
 try {
   const hash = location.hash.slice(1);
-  if (hash) state = JSON.parse(decodeURIComponent(escape(atob(hash))));
+  if (hash) form = JSON.parse(decodeURIComponent(escape(atob(hash))));
 } catch (e) { console.error("No se pudo leer el formulario del enlace", e); }
 
+const identityRoot = document.getElementById("identity-root");
 const takeRoot = document.getElementById("take-root");
+let tabSwitches = 0;
+let timerInterval = null;
 
-if (!state) {
-  takeRoot.innerHTML = '<div class="empty-note">Este enlace no tiene un cuestionario cargado. Pedile al profesor el enlace/QR generado desde el constructor.</div>';
+if (!form) {
+  identityRoot.innerHTML = '<div class="empty-note">Este enlace no tiene un cuestionario cargado. Pedile al profesor el QR/enlace generado desde el panel.</div>';
 } else {
-  document.getElementById("tb-title").textContent = state.title || "Cuestionario";
-  document.getElementById("tb-subtitle").textContent = state.subtitle || "";
-  const allQuestions = state.sections.flatMap(s => s.questions);
-  const totalPoints = allQuestions.reduce((a,q)=> a + (q.type.startsWith("info") ? 0 : Number(q.points)||0), 0);
+  document.getElementById("tb-title").textContent = form.title || "Parcialito";
+  document.getElementById("tb-subtitle").textContent = form.subtitle || "";
+  const allQuestions = form.sections.flatMap((s) => s.questions);
+  const totalPoints = allQuestions.reduce((a, q) => a + (Number(q.points) || 0), 0);
   document.getElementById("tb-count").textContent = allQuestions.length;
   document.getElementById("tb-points").textContent = totalPoints + " pts";
+  renderIdentity();
+}
 
+function renderIdentity() {
+  identityRoot.innerHTML = "";
+  const card = document.createElement("div");
+  card.className = "take-question";
+  card.innerHTML = `<div class="take-question__label">Antes de empezar</div>`;
+
+  const nameField = document.createElement("div");
+  nameField.innerHTML = `<label class="field-label">Apellido/s y Nombre/s</label>`;
+  const nameInp = document.createElement("input"); nameInp.type = "text";
+  nameField.appendChild(nameInp); card.appendChild(nameField);
+
+  const numField = document.createElement("div");
+  numField.innerHTML = `<label class="field-label">N° de alumno</label>`;
+  const numInp = document.createElement("input"); numInp.type = "text";
+  numField.appendChild(numInp); card.appendChild(numField);
+
+  const comField = document.createElement("div");
+  comField.innerHTML = `<label class="field-label">Comisión</label>`;
+  const comSel = document.createElement("select");
+  comSel.style.cssText = "width:100%; border:1px solid var(--line-strong); border-radius:2px; padding:8px 10px; font-size:14px;";
+  const emptyOpt = document.createElement("option"); emptyOpt.value = ""; emptyOpt.textContent = "Elegí tu comisión…";
+  comSel.appendChild(emptyOpt);
+  (form.comisiones || []).forEach((c) => { const o = document.createElement("option"); o.value = c; o.textContent = c; comSel.appendChild(o); });
+  comField.appendChild(comSel); card.appendChild(comField);
+
+  const startBtn = document.createElement("button");
+  startBtn.className = "btn btn-accent"; startBtn.style.marginTop = "14px";
+  startBtn.textContent = "Empezar";
+  startBtn.addEventListener("click", async () => {
+    const nombre = nameInp.value.trim(), numeroAlumno = numInp.value.trim(), comision = comSel.value;
+    if (!nombre || !numeroAlumno || !comision) { alert("Completá nombre, N° de alumno y comisión para continuar."); return; }
+    startBtn.disabled = true; startBtn.textContent = "Verificando…";
+    if (form.sheetWebAppUrl) {
+      try {
+        const checkUrl = `${form.sheetWebAppUrl}?action=check&formId=${encodeURIComponent(form.id)}&numeroAlumno=${encodeURIComponent(numeroAlumno)}&comision=${encodeURIComponent(comision)}`;
+        const res = await fetch(checkUrl);
+        const data = await res.json();
+        if (data.submitted) {
+          identityRoot.innerHTML = '<div class="warn-banner">Este número de alumno ya tiene una respuesta registrada para este parcialito en esta comisión. No se puede volver a rendir.</div>';
+          return;
+        }
+      } catch (e) {
+        console.warn("No se pudo verificar contra la planilla (¿URL de Apps Script sin conectar?). Se continúa sin bloqueo de reingreso.", e);
+      }
+    }
+    setupWatermark(nombre, numeroAlumno);
+    identityRoot.style.display = "none";
+    takeRoot.style.display = "block";
+    renderTake({ nombre, numeroAlumno, comision });
+  });
+  card.appendChild(startBtn);
+  identityRoot.appendChild(card);
+}
+
+function setupWatermark(nombre, numeroAlumno) {
+  const wm = document.getElementById("watermark");
+  const text = `${nombre} · ${numeroAlumno}`;
+  for (let i = 0; i < 24; i++) {
+    const span = document.createElement("span"); span.textContent = text; wm.appendChild(span);
+  }
+}
+
+function normalizeText(s){ return String(s||"").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,""); }
+function normalizeNumber(s){ const c = String(s||"").trim().replace(",", "."); const n = parseFloat(c); return Number.isNaN(n) ? null : n; }
+
+document.addEventListener("visibilitychange", () => { if (document.hidden) tabSwitches++; });
+
+function renderTake(identity) {
+  takeRoot.innerHTML = "";
   const answers = {};
-  state.sections.forEach(section => {
-    const h = document.createElement("h3");
-    h.style.fontFamily = "var(--font-display)";
-    h.style.margin = "22px 0 10px";
-    h.textContent = section.title;
-    takeRoot.appendChild(h);
+  const allQuestions = form.sections.flatMap((s) => s.questions);
+  const totalPoints = allQuestions.reduce((a, q) => a + (Number(q.points) || 0), 0);
 
-    section.questions.forEach(q => {
+  if (form.timeLimitMinutes) {
+    const badge = document.createElement("div");
+    badge.className = "timer-badge"; badge.id = "timer-badge";
+    takeRoot.appendChild(badge);
+    let secondsLeft = form.timeLimitMinutes * 60;
+    updateTimer();
+    timerInterval = setInterval(() => {
+      secondsLeft--; updateTimer();
+      if (secondsLeft <= 0) { clearInterval(timerInterval); doSubmit(true); }
+    }, 1000);
+    function updateTimer() {
+      const m = Math.floor(secondsLeft / 60), s = secondsLeft % 60;
+      badge.textContent = `⏱ ${m}:${String(s).padStart(2, "0")}`;
+      badge.classList.toggle("warn", secondsLeft <= 60);
+    }
+  }
+
+  form.sections.forEach((section) => {
+    const secTitle = document.createElement("h3");
+    secTitle.style.fontFamily = "var(--font-display)"; secTitle.style.margin = "22px 0 10px";
+    secTitle.textContent = section.title;
+    takeRoot.appendChild(secTitle);
+
+    section.questions.forEach((q) => {
       const card = document.createElement("div");
-      card.className = "take-question";
-      card.dataset.qid = q.id;
+      card.className = "take-question"; card.dataset.qid = q.id;
       const lbl = document.createElement("div");
-      lbl.className = "take-question__label";
-      lbl.textContent = q.label || "(sin enunciado)";
+      lbl.className = "take-question__label"; lbl.textContent = q.label || "(sin enunciado)";
       card.appendChild(lbl);
-      if (!q.type.startsWith("info")) {
-        const pts = document.createElement("div");
-        pts.className = "take-question__points";
-        pts.textContent = `Valor: ${q.points} punto(s)`;
-        card.appendChild(pts);
-      }
-      if (q.image) {
-        const img = document.createElement("img");
-        img.className = "q-img"; img.src = q.image;
-        card.appendChild(img);
-      }
-      if (q.type === "info_text" || q.type === "short_text" || q.type === "number") {
+      const pts = document.createElement("div");
+      pts.className = "take-question__points"; pts.textContent = `Valor: ${q.points} punto(s)`;
+      card.appendChild(pts);
+      if (q.image) { const img = document.createElement("img"); img.className = "q-img"; img.src = q.image; card.appendChild(img); }
+
+      if (q.type === "short_text" || q.type === "number") {
         const inp = document.createElement("input");
         inp.type = "text";
         inp.addEventListener("input", () => { answers[q.id] = inp.value; });
         card.appendChild(inp);
       } else {
-        q.options.forEach(opt => {
-          const row = document.createElement("label");
-          row.className = "choice-row";
+        q.options.forEach((opt) => {
+          const row = document.createElement("label"); row.className = "choice-row";
           const radio = document.createElement("input");
           radio.type = "radio"; radio.name = "take_" + q.id; radio.value = opt.id;
           radio.addEventListener("change", () => { answers[q.id] = opt.id; });
           row.appendChild(radio);
-          const span = document.createElement("span");
-          span.textContent = opt.text;
+          const span = document.createElement("span"); span.textContent = opt.text;
           row.appendChild(span);
           card.appendChild(row);
         });
@@ -106,42 +186,56 @@ if (!state) {
   });
 
   const submitBtn = document.createElement("button");
-  submitBtn.className = "btn btn-accent";
-  submitBtn.style.marginTop = "10px";
+  submitBtn.className = "btn btn-accent"; submitBtn.style.marginTop = "10px";
   submitBtn.textContent = "Enviar respuestas";
-  submitBtn.addEventListener("click", () => {
+  submitBtn.addEventListener("click", () => doSubmit(false));
+  takeRoot.appendChild(submitBtn);
+
+  function doSubmit(auto) {
+    if (timerInterval) clearInterval(timerInterval);
+    submitBtn.disabled = true;
     let score = 0;
-    allQuestions.forEach(q => {
-      if (q.type.startsWith("info")) return;
+    const detail = [];
+    allQuestions.forEach((q) => {
       const given = answers[q.id];
       let correct = false;
-      if (q.type === "short_text") {
-        correct = (q.acceptedAnswers||[]).some(a => normalizeText(a) === normalizeText(given));
-      } else if (q.type === "number") {
-        const g = normalizeNumber(given);
-        correct = g !== null && (q.acceptedAnswers||[]).some(a => normalizeNumber(a) === g);
-      } else if (q.type === "multiple_choice") {
-        correct = given === q.correctOptionId;
-      }
-      if (correct) score += Number(q.points)||0;
+      if (q.type === "short_text") correct = (q.acceptedAnswers || []).some((a) => normalizeText(a) === normalizeText(given));
+      else if (q.type === "number") { const g = normalizeNumber(given); correct = g !== null && (q.acceptedAnswers || []).some((a) => normalizeNumber(a) === g); }
+      else if (q.type === "multiple_choice") correct = given === q.correctOptionId;
+      if (correct) score += Number(q.points) || 0;
+      detail.push({ pregunta: q.label, respuesta: given || "", correcta: correct, puntos: correct ? q.points : 0 });
       const card = takeRoot.querySelector(`[data-qid="${q.id}"]`);
-      const badge = document.createElement("span");
-      badge.className = "result-badge " + (correct ? "ok":"bad");
-      badge.textContent = correct ? "✓ Correcta" : "✗ Incorrecta";
-      card.querySelector(".take-question__label").appendChild(badge);
+      if (card) {
+        const badge = document.createElement("span");
+        badge.className = "result-badge " + (correct ? "ok" : "bad");
+        badge.textContent = correct ? "✓ Correcta" : "✗ Incorrecta";
+        card.querySelector(".take-question__label").appendChild(badge);
+      }
     });
+
+    if (form.sheetWebAppUrl) {
+      fetch(form.sheetWebAppUrl, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({
+          action: "submit", formId: form.id, formTitle: form.title,
+          comision: identity.comision, numeroAlumno: identity.numeroAlumno, nombre: identity.nombre,
+          score, totalPoints, tabSwitches, detail,
+        }),
+      }).catch((e) => console.warn("No se pudo enviar a la planilla", e));
+    }
+
     submitBtn.remove();
-    const panel = document.createElement("div");
-    panel.className = "score-panel";
-    panel.innerHTML = `<span>Puntaje obtenido</span><span class="num">${score} / ${totalPoints}</span>`;
+    const panel = document.createElement("div"); panel.className = "score-panel";
+    panel.innerHTML = `<span>${auto ? "Tiempo agotado — envío automático" : "Puntaje obtenido"}</span><span class="num">${score} / ${totalPoints}</span>`;
     takeRoot.appendChild(panel);
-    takeRoot.appendChild(Object.assign(document.createElement("p"), {
-      className: "hint",
-      style: "font-size:12px;color:var(--muted);margin-top:10px;",
-      textContent: "Nota: en esta fase de prueba el resultado se muestra en pantalla pero todavía no viaja a la planilla del profesor — eso se conecta en la fase 2."
-    }));
-  });
-  takeRoot.appendChild(submitBtn);
+    const note = document.createElement("p");
+    note.className = "hint"; note.style.cssText = "font-size:12px;color:var(--muted);margin-top:10px;";
+    note.textContent = form.sheetWebAppUrl
+      ? "Tu respuesta ya quedó registrada. Podés cerrar esta ventana."
+      : "Nota: este parcialito todavía no tiene conectado el registro central — avisale al profesor.";
+    takeRoot.appendChild(note);
+  }
 }
 </script>
 </body>

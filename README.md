@@ -1,67 +1,109 @@
-# Parcialito Builder
+# Parcialito — sistema de cuestionarios de cátedra
 
-Constructor de cuestionarios estilo Google Forms / Microsoft Forms, pensado para
-parciales de cátedra. Sin instalación: es HTML/CSS/JS puro, corre en cualquier
-navegador y se publica gratis con **GitHub Pages**.
+Constructor de parcialitos estilo Google Forms / Microsoft Forms, con QR para
+proyectar en el aula, bloqueo de reingreso, temporizador, y resultados
+centralizados en una planilla de Google Sheets (que se descarga como Excel
+cuando quieras). Todo corre gratis en **GitHub Pages**, sin servidores que
+mantener.
 
-Ya viene cargado con el ejemplo real **"PARCIALITO LAMINA Nro. 0"** para que el
-profesor lo vea funcionando de entrada.
+## Estructura del sistema
 
-## Qué incluye esta primera fase
+| Página | Para qué es |
+|---|---|
+| `index.html` | Panel principal: lista todos tus parcialitos, crear/editar/duplicar/borrar |
+| `editor.html` | Armar un parcialito: título, comisiones, tiempo, preguntas y puntaje |
+| `take.html` | La pantalla que ve el alumno al escanear el QR |
+| `resultados.html` | Ver y exportar a Excel las respuestas de un parcialito, filtradas por comisión |
+| `docs/apps-script.gs` | Código para conectar una Google Sheet como base de respuestas |
 
-- ✅ Editor de cuestionarios (secciones, preguntas, puntaje por pregunta)
-- ✅ Tipos de pregunta: dato identificatorio (texto/opción), respuesta corta
-  de texto, respuesta corta numérica, opción múltiple, con imagen opcional
-  en el enunciado
-- ✅ Corrector automático:
-  - texto → ignora mayúsculas/minúsculas y tildes, acepta varias respuestas válidas
-  - número → acepta coma o punto como separador decimal, acepta varias respuestas válidas
-  - opción múltiple → una sola correcta
-- ✅ Vista previa / "rendir" para probar la corrección antes de imprimir el examen
-- ✅ Exportar el cuestionario a `.json` y generar un enlace + QR de prueba
+## Paso 1 — Publicar el sitio en GitHub Pages
 
-## Qué falta para producción (fase 2 — a definir con el profesor)
+1. Subí toda esta carpeta a un repositorio de GitHub (podés crear uno nuevo).
+2. Settings → Pages → Source → rama `main`, carpeta `/ (root)` → Guardar.
+3. GitHub te da una URL tipo `https://tu-usuario.github.io/tu-repo/`. Esa es
+   la dirección de tu panel (`index.html`).
 
-- Registro real de respuestas en una planilla (Excel/Google Sheets), organizado
-  por comisión
-- QR estable por comisión/fecha (hoy el QR de prueba funciona sin servidor,
-  pero para escalarlo a muchos alumnos conviene alojar el formulario como
-  archivo en `forms/` y sumar un backend liviano para guardar respuestas)
-- Configuraciones anti-copia (orden aleatorio de preguntas/opciones, tiempo
-  límite, un solo envío por alumno, bloqueo de copiar/pegar, etc.)
+## Paso 2 — Conectar Google Sheets (una sola vez, para siempre)
 
-## Cómo publicarlo en GitHub Pages
+Esto es lo que permite que las respuestas de **todos** los alumnos, desde
+**sus propios celulares**, terminen en una única planilla — y lo que hace
+posible bloquear que alguien responda dos veces.
 
-1. Creá un repositorio nuevo en GitHub (puede ser privado o público).
-2. Subí estos archivos tal cual están (`index.html`, `take.html`, la carpeta
-   `assets/` y `forms/`), manteniendo la misma estructura de carpetas.
-3. En el repo: **Settings → Pages → Source** → elegí la rama `main` y la
-   carpeta `/ (root)`. Guardá.
-4. GitHub te va a dar una URL tipo:
-   `https://tu-usuario.github.io/nombre-del-repo/`
-5. Esa es la página del **constructor** (`index.html`). Se ve, se edita y se
-   prueba ahí mismo, sin instalar nada.
+1. Creá una Google Sheet nueva (ej: "Parcialitos - Respuestas").
+2. **Extensiones → Apps Script**.
+3. Borrá el contenido de ejemplo y pegá el código completo de
+   `docs/apps-script.gs`.
+4. **Implementar → Nueva implementación** → tipo "Aplicación web" → ejecutar
+   como "Yo" → acceso "Cualquier usuario".
+5. Autorizá los permisos (son de tu propia cuenta).
+6. Copiá la URL que termina en `/exec`.
+7. En el panel: `editor.html` de tu parcialito → pestaña **"03 · Publicar /
+   QR"** → pegala en "URL de Google Apps Script (/exec)".
+8. (Opcional) pegá también el link normal de la planilla, para poder abrirla
+   directo desde "Resultados".
 
-## Cómo lo usa el profesor
+**Podés usar la misma planilla para todos tus parcialitos** — cada uno se
+identifica solo por su propio ID, así que las respuestas de todos quedan
+ordenadas juntas y no se mezclan entre sí.
 
-1. Entra a la URL del constructor → pestaña **"01 · Editor"**.
-2. Puede tocar **"Cargar ejemplo del profe"** para ver el parcialito ya armado,
-   o **"Formulario en blanco"** para empezar uno nuevo.
-3. Agrega secciones y preguntas con los botones **"+ Agregar sección"** / **"+ ..."**.
-4. En **"02 · Vista previa / Rendir"** prueba el cuestionario como si fuera alumno.
-5. En **"03 · Compartir / Exportar"**:
-   - descarga el `.json` del cuestionario (para guardarlo o subirlo al repo)
-   - copia el enlace o muestra el QR en pantalla para que los alumnos lo escaneen
-     y lo respondan desde el celular (funciona ya, sin necesidad de más
-     configuración — es la base sobre la que se conecta el registro en Excel
-     en la fase 2)
+Si más adelante modificás `apps-script.gs`, tenés que volver a implementar
+("Administrar implementaciones" → editar → nueva versión) para que se
+actualice la URL `/exec`.
 
-## Estructura de archivos
+## Paso 3 — Armar un parcialito
 
-```
-index.html          → constructor (uso del profesor)
-take.html           → vista para que el alumno rinda (a donde apunta el QR)
-assets/style.css     → estilos
-assets/app.js        → lógica del constructor y la corrección
-forms/               → (fase 2) acá van a vivir los .json de cada parcial publicado
-```
+1. Entrá al panel (`index.html`) → "Nuevo parcialito en blanco" (o cargá el
+   ejemplo precargado para ver cómo funciona).
+2. Editor: cargá título, subtítulo, las comisiones (ej: "Comisión A",
+   "Comisión B", "Comisión C" — **un solo QR después sirve para las tres**,
+   porque el alumno la elige al empezar), y el tiempo límite si querés.
+3. Agregá secciones y preguntas: opción múltiple, verdadero/falso, respuesta
+   corta o desarrollo, numérica — cada una con su puntaje y (si corresponde)
+   la respuesta correcta.
+4. "02 · Vista previa" para probar la corrección antes de publicar.
+5. "03 · Publicar / QR": ahí conectás la planilla (paso 2) y aparece el QR +
+   enlace para proyectar en el aula.
+
+## Qué pasa cuando el alumno escanea el QR
+
+1. Carga nombre, N° de alumno y elige su comisión.
+2. El sistema chequea contra la planilla si ya respondió — si ya lo hizo, no
+   lo deja entrar de nuevo.
+3. Ve un temporizador (si lo configuraste) y responde.
+4. Al enviar (o si se acaba el tiempo), ve su puntaje al instante y la
+   respuesta queda guardada en la planilla, junto con cuántas veces cambió de
+   pantalla durante el examen.
+
+## Resultados
+
+Desde el panel → "Resultados" de cada parcialito: tabla ordenada por N° de
+alumno, filtrable por comisión o por nombre, con botón para descargar todo en
+un `.xlsx` listo para abrir en Excel. Como cada fila ya tiene nombre + N° de
+alumno + comisión, esa misma planilla te sirve como lista de asistencia del
+día del parcialito.
+
+## Sobre las configuraciones anti-copia — qué sí y qué no
+
+- ✅ **Bloqueo de reingreso**: implementado (por N° de alumno + comisión + parcialito).
+- ✅ **Temporizador con envío automático**: implementado.
+- ✅ **Un solo QR para varias comisiones**: implementado (la comisión se
+  elige dentro del formulario).
+- ⚠️ **Evitar capturas de pantalla**: no existe forma de bloquear esto en una
+  página web (ninguna plataforma web puede hacerlo, incluyendo Google Forms
+  y Microsoft Forms). Lo que sí hicimos como disuasivo:
+  - marca de agua con nombre y N° de alumno superpuesta en toda la pantalla
+    del examen (si circula una captura, se sabe de quién salió),
+  - se registra cuántas veces el alumno cambió de pestaña/app durante el
+    examen (columna "Cambios de pantalla" en resultados),
+  - clic derecho y selección de texto deshabilitados (frena copiar y pegar
+    casual, no una foto con el celular).
+
+## Nota de seguridad
+
+El corrector vive en el navegador del alumno (para poder mostrarle el
+puntaje al instante), así que las respuestas correctas viajan dentro del
+enlace/QR. Para un parcialito de aula esto es un riesgo bajo, pero un alumno
+con conocimientos técnicos podría inspeccionar el código de la página y
+encontrarlas. Si en algún momento querés blindarlo del todo, el siguiente
+paso sería mover la corrección a un servidor propio (ahí sí conviene sumar
+una base de datos en Vercel en vez de Google Sheets).
