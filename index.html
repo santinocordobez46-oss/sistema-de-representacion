@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Parcialito Builder — constructor de cuestionarios</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<div class="titleblock">
+  <div class="titleblock__main">
+    <p class="titleblock__eyebrow">Constructor de cuestionarios · borrador de cátedra</p>
+    <h1 class="titleblock__title" id="tb-title">PARCIALITO LAMINA Nro. 0</h1>
+  </div>
+  <div class="titleblock__meta">
+    <div><b id="tb-count">0</b>preguntas</div>
+    <div><b id="tb-points">0 pts</b>puntaje total</div>
+    <div><span id="tb-subtitle"></span></div>
+  </div>
+</div>
+
+<nav class="ruler-tabs">
+  <button class="active" data-view="view-editor">01 · Editor</button>
+  <button data-view="view-take">02 · Vista previa / Rendir</button>
+  <button data-view="view-export">03 · Compartir / Exportar</button>
+</nav>
+
+<div class="app">
+
+  <!-- ============ EDITOR ============ -->
+  <section id="view-editor" class="view active">
+    <div class="toolbar">
+      <span class="hint">Armá el cuestionario como en Forms: agregá secciones y preguntas, definí puntaje y respuestas correctas.</span>
+      <div style="display:flex; gap:8px;">
+        <button class="btn" id="btn-load-example">Cargar ejemplo del profe</button>
+        <button class="btn btn-ghost" id="btn-new-form">Formulario en blanco</button>
+      </div>
+    </div>
+
+    <div class="section-card" style="margin-bottom:22px;">
+      <div class="section-card__head" style="background:var(--accent-soft);">
+        <span class="section-tick" style="border-color:var(--accent); color:var(--accent);">TÍTULO</span>
+      </div>
+      <div class="section-card__body">
+        <label class="field-label">Título del cuestionario</label>
+        <input type="text" id="form-title">
+        <label class="field-label">Subtítulo / tema</label>
+        <input type="text" id="form-subtitle">
+      </div>
+    </div>
+
+    <div id="builder-sections"></div>
+  </section>
+
+  <!-- ============ VISTA PREVIA / RENDIR ============ -->
+  <section id="view-take" class="view">
+    <div class="toolbar">
+      <span class="hint">Así lo ve el alumno. Completá y presioná "Corregir" para probar la auto-corrección.</span>
+    </div>
+    <div id="take-root"></div>
+  </section>
+
+  <!-- ============ EXPORTAR ============ -->
+  <section id="view-export" class="view">
+    <div class="toolbar">
+      <span class="hint">Fase 1: descargá el formulario o probá el enlace/QR de ejemplo. El QR y el registro en Excel “de verdad” llegan en la fase 2, con las comisiones y las opciones anti-copia.</span>
+    </div>
+    <div class="export-grid">
+      <div class="export-card">
+        <h3>Descargar formulario</h3>
+        <p style="font-size:13px; color:var(--muted);">Guardalo como archivo <code>.json</code> para subirlo al repositorio de GitHub (carpeta <code>forms/</code>).</p>
+        <button class="btn btn-primary" id="btn-download-json">⬇ Descargar .json</button>
+        <label class="field-label" style="margin-top:16px;">Vista del archivo</label>
+        <pre id="export-json"></pre>
+      </div>
+      <div class="export-card">
+        <h3>Enlace y QR de prueba</h3>
+        <p style="font-size:13px; color:var(--muted);">Este QR abre una vista para rendir el cuestionario (funciona ya mismo, sin backend). Ideal para probarlo en el aula antes de conectar el registro en Excel.</p>
+        <div id="qrcode-box"></div>
+        <label class="field-label">Enlace</label>
+        <div style="display:flex; gap:8px;">
+          <input type="text" id="share-url" readonly>
+          <button class="btn btn-small" id="btn-copy-link">Copiar</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>
