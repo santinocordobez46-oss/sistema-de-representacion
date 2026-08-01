@@ -1,43 +1,16 @@
 /* ============================================================
-   PARCIALITO — editor.js (v2, con backend central)
+   PARCIALITO — editor.js
    ============================================================ */
-
-if (!getApiUrl()) { location.href = "index.html"; }
 
 const params = new URLSearchParams(location.search);
 const formId = params.get("id");
-let form = null;
-let saveTimer = null;
-
-const statusEl = document.getElementById("save-status");
-
-async function boot() {
-  try {
-    const res = await apiGetForm(formId);
-    if (!res.ok) throw new Error(res.error || "No encontrado");
-    form = res.form;
-    form.comisiones = form.comisiones || [];
-    form.sections = form.sections || [];
-    initHeader();
-    renderBuilder();
-    statusEl.textContent = "Guardado ✓";
-    const wantedTab = params.get("tab") === "publish" ? "view-publish" : document.querySelector(".ruler-tabs button.active").dataset.view;
-    activateTab(wantedTab);
-  } catch (err) {
-    alert("No se pudo cargar este parcialito (" + err.message + "). Volviendo al panel.");
-    location.href = "index.html";
-  }
+let form = getForm(formId);
+if (!form) {
+  alert("No se encontró ese parcialito. Volviendo al panel.");
+  location.href = "index.html";
 }
 
-function persist() {
-  syncTitleblock();
-  statusEl.textContent = "Guardando…";
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(async () => {
-    try { await apiSaveForm(form); statusEl.textContent = "Guardado ✓"; }
-    catch (e) { statusEl.textContent = "Error al guardar"; }
-  }, 600);
-}
+function persist() { upsertForm(form); syncTitleblock(); }
 
 /* ---------- tabs ---------- */
 document.querySelectorAll(".ruler-tabs button").forEach((btn) => {
@@ -46,10 +19,10 @@ document.querySelectorAll(".ruler-tabs button").forEach((btn) => {
 function activateTab(viewId) {
   document.querySelectorAll(".ruler-tabs button").forEach((b) => b.classList.toggle("active", b.dataset.view === viewId));
   document.querySelectorAll(".view").forEach((v) => v.classList.toggle("active", v.id === viewId));
-  if (!form) return; // todavía está cargando; se vuelve a llamar desde initHeader() al terminar
   if (viewId === "view-take") renderTake();
   if (viewId === "view-publish") renderPublish();
 }
+if (params.get("tab") === "publish") activateTab("view-publish");
 
 /* ============================================================
    HEADER / CONFIG
@@ -73,10 +46,13 @@ function renderComisiones() {
   comisionesBox.innerHTML = "";
   (form.comisiones || []).forEach((c, idx) => {
     const tag = document.createElement("span");
-    tag.className = "tag"; tag.innerHTML = `<span>${escapeHtml(c)}</span>`;
-    const rm = document.createElement("button"); rm.textContent = "×";
+    tag.className = "tag";
+    tag.innerHTML = `<span>${escapeHtml(c)}</span>`;
+    const rm = document.createElement("button");
+    rm.textContent = "×";
     rm.addEventListener("click", () => { form.comisiones.splice(idx, 1); persist(); renderComisiones(); });
-    tag.appendChild(rm); comisionesBox.appendChild(tag);
+    tag.appendChild(rm);
+    comisionesBox.appendChild(tag);
   });
   const inp = document.createElement("input");
   inp.type = "text"; inp.placeholder = "Nombre de comisión y Enter";
@@ -93,6 +69,7 @@ function renderComisiones() {
 
 function syncTitleblock() {
   document.getElementById("tb-title").textContent = form.title || "Sin título";
+  document.getElementById("tb-subtitle").textContent = form.subtitle || "";
   document.getElementById("tb-points").textContent = totalPointsOf(form) + " pts";
   document.getElementById("tb-count").textContent = questionCountOf(form);
 }
@@ -126,6 +103,7 @@ function renderBuilder() {
 function renderSectionCard(section, sIdx) {
   const card = document.createElement("div");
   card.className = "section-card";
+
   const head = document.createElement("div");
   head.className = "section-card__head";
   head.innerHTML = `<span class="section-tick">SECC. ${String(sIdx + 1).padStart(2, "0")}</span>`;
@@ -173,6 +151,7 @@ function makeBlankQuestion(type) {
 function renderQuestionBlock(section, q, qIdx) {
   const block = document.createElement("div");
   block.className = "qblock";
+
   const head = document.createElement("div");
   head.className = "qblock__head";
   head.innerHTML = `<span class="qnum">${qIdx + 1}</span>`;
@@ -268,7 +247,7 @@ function renderQuestionBlock(section, q, qIdx) {
       const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = q.caseInsensitive !== false;
       cb.addEventListener("change", () => { q.caseInsensitive = cb.checked; persist(); });
       chk.appendChild(cb);
-      chk.appendChild(document.createTextNode(" Ignorar mayúsculas/minúsculas y tildes al corregir"));
+      chk.appendChild(document.createTextNode(" Ignorar mayúsculas/minúsculas y tildes al corregir (recomendado para \"desarrollo\" corto)"));
       body.appendChild(chk);
     } else {
       const note = document.createElement("div"); note.className = "checkrow";
@@ -318,6 +297,7 @@ function renderQuestionBlock(section, q, qIdx) {
   delBtn.addEventListener("click", () => { section.questions.splice(qIdx, 1); persist(); renderBuilder(); });
   foot.appendChild(delBtn);
   block.appendChild(foot);
+
   return block;
 }
 
@@ -339,8 +319,9 @@ const takeRoot = document.getElementById("take-root");
 function renderTake() {
   takeRoot.innerHTML = "";
   const note = document.createElement("div");
-  note.className = "empty-note"; note.style.marginBottom = "16px";
-  note.textContent = "Vista previa: acá probás la corrección. Nada de esto se guarda.";
+  note.className = "empty-note";
+  note.style.marginBottom = "16px";
+  note.textContent = "Vista previa: acá probás la corrección. Nada de esto se guarda en la planilla.";
   takeRoot.appendChild(note);
 
   const answers = {};
@@ -412,82 +393,38 @@ function renderTake() {
 }
 
 /* ============================================================
-   PUBLICAR — un QR por comisión, generado con un servicio de imagen
-   directo (más robusto que depender de una librería JS de terceros)
+   PUBLICAR
    ============================================================ */
 function renderPublish() {
-  renderExamStatus();
+  document.getElementById("form-sheeturl").value = form.sheetWebAppUrl || "";
+  document.getElementById("form-sheetviewurl").value = form.sheetViewUrl || "";
+  document.getElementById("form-sheeturl").oninput = (e) => { form.sheetWebAppUrl = e.target.value.trim(); persist(); };
+  document.getElementById("form-sheetviewurl").oninput = (e) => { form.sheetViewUrl = e.target.value.trim(); persist(); };
 
-  const warnBox = document.getElementById("publish-warning");
-  const grid = document.getElementById("qr-per-comision");
-  warnBox.innerHTML = "";
-  grid.innerHTML = "";
-
-  if (!form.comisiones || form.comisiones.length === 0) {
-    warnBox.innerHTML = '<p class="empty-note">Todavía no agregaste comisiones en "01 · Editor". Agregá al menos una para poder generar su QR.</p>';
-    return;
-  }
-
+  const compact = btoa(unescape(encodeURIComponent(JSON.stringify(form))));
   const baseUrl = location.href.replace(/editor\.html.*$/, "");
+  const shareUrl = baseUrl + "take.html#" + compact;
+  document.getElementById("share-url").value = shareUrl;
 
-  form.comisiones.forEach((comision) => {
-    const shareUrl = `${baseUrl}take.html?id=${encodeURIComponent(form.id)}&api=${encodeURIComponent(getApiUrl())}&comision=${encodeURIComponent(comision)}`;
-    const qrImgUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&data=${encodeURIComponent(shareUrl)}`;
-
-    const card = document.createElement("div");
-    card.className = "qr-card";
-    card.innerHTML = `
-      <span class="qr-card__com">${escapeHtml(comision)}</span>
-      <img src="${qrImgUrl}" width="180" height="180" alt="QR ${escapeHtml(comision)}" loading="lazy"
-           onerror="this.replaceWith(Object.assign(document.createElement('p'),{className:'empty-note',textContent:'No se pudo generar la imagen del QR (revisá tu conexión) — usá el enlace de abajo.'}))">
-      <div class="share-url-row">
-        <input type="text" readonly value="${escapeHtml(shareUrl)}">
-        <button class="btn btn-small btn-copy">Copiar</button>
-      </div>`;
-    card.querySelector(".btn-copy").addEventListener("click", () => {
-      const inp = card.querySelector("input");
-      inp.select(); document.execCommand("copy");
-    });
-    grid.appendChild(card);
-  });
-}
-
-function renderExamStatus() {
-  const badge = document.getElementById("exam-status-badge");
-  const startBtn = document.getElementById("btn-start-exam");
-  const endBtn = document.getElementById("btn-end-exam");
-  const isOpen = form.examStatus === "abierto";
-  badge.textContent = isOpen ? "● Parcial ABIERTO — los alumnos ya pueden responder" : "● Parcial CERRADO";
-  badge.className = "result-badge " + (isOpen ? "ok" : "bad");
-  startBtn.disabled = isOpen;
-  endBtn.disabled = !isOpen;
-}
-
-async function setExamStatus(status) {
-  const startBtn = document.getElementById("btn-start-exam");
-  const endBtn = document.getElementById("btn-end-exam");
-  startBtn.disabled = true; endBtn.disabled = true;
-  clearTimeout(saveTimer); // evita que un guardado demorado de otro campo pise este cambio
-  form.examStatus = status;
-  try {
-    await apiSaveForm(form);
-  } catch (e) {
-    alert("No se pudo actualizar el estado del parcial. Probá de nuevo.");
+  const qrBox = document.getElementById("qrcode-box");
+  qrBox.innerHTML = "";
+  if (shareUrl.length > 2200) {
+    qrBox.innerHTML = `<p class="empty-note">Este formulario tiene imágenes y el enlace quedó muy largo para un QR directo. Si esto pasa, avisame y sumamos alojar el formulario como archivo aparte para un link corto.</p>`;
+  } else if (window.QRCode) {
+    new QRCode(qrBox, { text: shareUrl, width: 176, height: 176 });
   }
-  renderExamStatus();
+
+  if (!form.sheetWebAppUrl) {
+    const warn = document.createElement("p");
+    warn.className = "empty-note"; warn.style.marginTop = "10px";
+    warn.textContent = "Todavía no conectaste la planilla de Google Sheets: los alumnos van a poder rendir y ver su puntaje, pero la respuesta NO se va a guardar ni se va a bloquear el reingreso hasta que la conectes.";
+    qrBox.parentElement.appendChild(warn);
+  }
 }
 
-document.getElementById("btn-start-exam").addEventListener("click", () => {
-  if (confirm("¿Iniciar el parcial ahora? A partir de este momento los alumnos que escaneen el QR van a poder empezar a responder.")) {
-    setExamStatus("abierto");
-  }
+document.getElementById("btn-copy-link").addEventListener("click", () => {
+  const inp = document.getElementById("share-url"); inp.select(); document.execCommand("copy");
 });
-document.getElementById("btn-end-exam").addEventListener("click", () => {
-  if (confirm("¿Finalizar el parcial ahora? Ningún envío más va a ser aceptado después de esto, aunque algún alumno todavía esté respondiendo.")) {
-    setExamStatus("cerrado");
-  }
-});
-
 document.getElementById("btn-download-json").addEventListener("click", () => {
   const blob = new Blob([JSON.stringify(form, null, 2)], { type: "application/json" });
   const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
@@ -496,4 +433,6 @@ document.getElementById("btn-download-json").addEventListener("click", () => {
 });
 document.getElementById("btn-go-results").addEventListener("click", () => { location.href = "resultados.html?id=" + form.id; });
 
-boot();
+/* ---------- init ---------- */
+initHeader();
+renderBuilder();

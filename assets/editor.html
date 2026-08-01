@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Editor de parcialito</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<div class="titleblock">
+  <div class="titleblock__main">
+    <p class="titleblock__eyebrow"><a href="index.html" style="color:var(--blue); text-decoration:none;">← Mis parcialitos</a></p>
+    <h1 class="titleblock__title" id="tb-title">Cargando…</h1>
+  </div>
+  <div class="titleblock__meta">
+    <div><b id="tb-count">0</b>preguntas</div>
+    <div><b id="tb-points">0 pts</b>puntaje total</div>
+    <div><span id="save-status">Cargando…</span></div>
+  </div>
+</div>
+
+<nav class="ruler-tabs">
+  <button class="active" data-view="view-editor">01 · Editor</button>
+  <button data-view="view-take">02 · Vista previa</button>
+  <button data-view="view-publish">03 · Publicar / QR</button>
+</nav>
+
+<div class="app">
+
+  <!-- ============ EDITOR ============ -->
+  <section id="view-editor" class="view active">
+    <div class="toolbar">
+      <span class="hint">Los cambios se guardan solos (mirá el indicador de arriba a la derecha).</span>
+      <button class="btn" id="btn-load-example">Reemplazar por el ejemplo del profe</button>
+    </div>
+
+    <div class="section-card" style="margin-bottom:22px;">
+      <div class="section-card__head" style="background:var(--accent-soft);">
+        <span class="section-tick" style="border-color:var(--accent); color:var(--accent);">TÍTULO Y CONFIGURACIÓN</span>
+      </div>
+      <div class="section-card__body">
+        <label class="field-label">Título del parcialito</label>
+        <input type="text" id="form-title">
+        <label class="field-label">Subtítulo / tema</label>
+        <input type="text" id="form-subtitle">
+
+        <label class="field-label">Comisiones (un mismo QR sirve para todas — el alumno elige la suya al empezar)</label>
+        <div class="tag-input" id="comisiones-input"></div>
+
+        <label class="field-label">Tiempo límite para responder (minutos, opcional)</label>
+        <input type="number" id="form-timelimit" min="1" placeholder="Sin límite de tiempo" style="max-width:180px;">
+      </div>
+    </div>
+
+    <div id="builder-sections"></div>
+  </section>
+
+  <!-- ============ VISTA PREVIA ============ -->
+  <section id="view-take" class="view">
+    <div class="toolbar">
+      <span class="hint">Así lo ve el alumno. Probá la corrección antes de publicar (acá no se guarda nada en la planilla).</span>
+    </div>
+    <div id="take-root"></div>
+  </section>
+
+  <!-- ============ PUBLICAR ============ -->
+  <section id="view-publish" class="view">
+    <div class="toolbar">
+      <span class="hint">Un QR distinto por cada comisión — proyectá el que corresponda según quién esté rindiendo.</span>
+    </div>
+
+    <div class="export-card" style="margin-bottom:20px;">
+      <h3>Control del parcial</h3>
+      <p style="font-size:13px;color:var(--muted);">Mientras esté <b>cerrado</b>, los alumnos que escaneen cualquiera de los QR ven una pantalla de espera y no pueden cargar respuestas. Iniciá cuando estés listo en el aula, y finalizá cuando se acabe el tiempo — a partir de ahí no se acepta ningún envío más.</p>
+      <div style="display:flex; align-items:center; gap:14px; margin-top:10px; flex-wrap:wrap;">
+        <span id="exam-status-badge" class="result-badge">—</span>
+        <button class="btn btn-accent" id="btn-start-exam">▶ Iniciar parcial</button>
+        <button class="btn btn-danger" id="btn-end-exam">■ Finalizar parcial</button>
+      </div>
+    </div>
+
+    <div id="publish-warning"></div>
+    <div class="forms-grid" id="qr-per-comision"></div>
+
+    <div class="export-card" style="margin-top:20px;">
+      <h3>Respaldo</h3>
+      <p style="font-size:13px; color:var(--muted);">El formulario ya vive en tu planilla central, esto es solo por si querés un respaldo aparte.</p>
+      <button class="btn btn-primary" id="btn-download-json">⬇ Descargar copia .json</button>
+      <label class="field-label" style="margin-top:16px;">Ver resultados</label>
+      <button class="btn" id="btn-go-results">Abrir panel de resultados →</button>
+    </div>
+  </section>
+
+</div>
+
+<script src="assets/common.js"></script>
+<script src="assets/editor.js"></script>
+</body>
+</html>

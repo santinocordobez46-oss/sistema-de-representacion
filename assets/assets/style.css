@@ -457,13 +457,3 @@ table.results-table tr:hover td{ background: #fafcfb; }
 .score-pill{ font-family: var(--font-mono); padding:2px 8px; border-radius:20px; font-size:12px; }
 .score-pill.high{ background: var(--good-soft); color: var(--good); }
 .score-pill.low{ background: var(--accent-soft); color: var(--accent); }
-
-/* ---------- tarjetas de QR por comisión ---------- */
-.qr-card{
-  background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius);
-  box-shadow: var(--shadow); padding: 16px; display:flex; flex-direction:column; align-items:center; gap:10px; text-align:center;
-}
-.qr-card__com{ font-family: var(--font-display); font-weight:600; font-size:15px; }
-.qr-card img{ border: 1px solid var(--line); border-radius: 2px; }
-.qr-card .share-url-row{ display:flex; gap:6px; width:100%; }
-.qr-card input[type=text]{ font-size:11px; padding:6px 8px; }

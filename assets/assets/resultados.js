@@ -1,20 +1,11 @@
-if (!getApiUrl()) location.href = "index.html";
-
 const rParams = new URLSearchParams(location.search);
 const rFormId = rParams.get("id");
-let rForm = null;
+const rForm = getForm(rFormId);
 let allRows = [];
 
-async function init() {
-  const container = document.getElementById("results-container");
-  try {
-    const res = await apiGetForm(rFormId);
-    if (!res.ok) throw new Error(res.error);
-    rForm = res.form;
-  } catch (err) {
-    container.innerHTML = `<p class="empty-note">No se encontró ese parcialito (${escapeHtml(err.message)}).</p>`;
-    return;
-  }
+if (!rForm) {
+  document.getElementById("results-container").innerHTML = '<p class="empty-note">No se encontró ese parcialito.</p>';
+} else {
   document.getElementById("tb-title").textContent = rForm.title;
   document.getElementById("tb-subtitle").textContent = rForm.subtitle || "";
   const comSel = document.getElementById("filter-comision");
@@ -22,19 +13,30 @@ async function init() {
     const o = document.createElement("option"); o.value = c; o.textContent = c;
     comSel.appendChild(o);
   });
+  if (rForm.sheetViewUrl) {
+    const link = document.getElementById("link-sheet");
+    link.href = rForm.sheetViewUrl; link.style.display = "inline-flex";
+  }
   load();
 }
 
 async function load() {
   const container = document.getElementById("results-container");
+  if (!rForm.sheetWebAppUrl) {
+    container.innerHTML = '<p class="empty-note">Este parcialito todavía no tiene conectada la planilla de Google Sheets. Andá a Editor → "03 · Publicar / QR" y pegá la URL de Apps Script.</p>';
+    document.getElementById("tb-count").textContent = "0";
+    return;
+  }
   container.innerHTML = '<p class="empty-note">Cargando respuestas…</p>';
   try {
-    const res = await apiResults(rForm.id);
-    if (!res.ok) throw new Error(res.error || "Error desconocido");
-    allRows = res.rows || [];
+    const url = `${rForm.sheetWebAppUrl}?action=results&formId=${encodeURIComponent(rForm.id)}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || "Error desconocido");
+    allRows = data.rows || [];
     renderTable();
   } catch (err) {
-    container.innerHTML = `<p class="empty-note">No se pudo conectar con la planilla (${escapeHtml(String(err.message || err))}).</p>`;
+    container.innerHTML = `<p class="empty-note">No se pudo conectar con la planilla (${escapeHtml(String(err.message || err))}). Revisá que la URL de Apps Script esté bien pegada y que la implementación esté publicada como "Cualquier usuario".</p>`;
   }
 }
 
@@ -106,5 +108,3 @@ document.getElementById("btn-export-xlsx").addEventListener("click", () => {
   XLSX.utils.book_append_sheet(wb, ws, "Resultados");
   XLSX.writeFile(wb, `${(rForm.title || "resultados").toLowerCase().replace(/[^a-z0-9]+/g, "-")}.xlsx`);
 });
-
-init();

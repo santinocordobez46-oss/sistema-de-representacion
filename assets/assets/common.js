@@ -1,41 +1,34 @@
 /* ============================================================
-   PARCIALITO — funciones compartidas (v2, con backend central)
+   PARCIALITO — funciones compartidas entre dashboard / editor / resultados / take
    ============================================================ */
 
-const GLOBAL_URL_KEY = "parcialito_api_url_v1";
+const FORMS_KEY = "parcialito_forms_v2";
 
-function uid(prefix = "id") { return prefix + "_" + Math.random().toString(36).slice(2, 9); }
-
-function getApiUrl() { return localStorage.getItem(GLOBAL_URL_KEY) || ""; }
-function setApiUrl(url) { localStorage.setItem(GLOBAL_URL_KEY, url.trim()); }
-
-/* ---------- llamadas al backend ---------- */
-async function apiGet(action, extraParams = {}) {
-  const url = new URL(getApiUrl());
-  url.searchParams.set("action", action);
-  Object.entries(extraParams).forEach(([k, v]) => url.searchParams.set(k, v));
-  const res = await fetch(url.toString());
-  return res.json();
-}
-async function apiPost(body) {
-  const res = await fetch(getApiUrl(), {
-    method: "POST",
-    headers: { "Content-Type": "text/plain;charset=utf-8" },
-    body: JSON.stringify(body),
-  });
-  return res.json();
+function uid(prefix = "id") {
+  return prefix + "_" + Math.random().toString(36).slice(2, 9);
 }
 
-async function apiListForms() { return apiGet("listforms"); }
-async function apiGetForm(id) { return apiGet("getform", { formId: id }); }
-async function apiSaveForm(form) { return apiPost({ action: "saveform", form }); }
-async function apiDeleteForm(id) { return apiPost({ action: "deleteform", formId: id }); }
-async function apiCheck(formId, numeroAlumno, comision) { return apiGet("check", { formId, numeroAlumno, comision }); }
-async function apiSubmit(payload) { return apiPost({ action: "submit", ...payload }); }
-async function apiResults(formId, comision) { return apiGet("results", comision ? { formId, comision } : { formId }); }
-async function apiNotas(comision) { return apiGet("notas", comision ? { comision } : {}); }
+function loadForms() {
+  try { return JSON.parse(localStorage.getItem(FORMS_KEY)) || []; }
+  catch (e) { return []; }
+}
+function saveForms(forms) {
+  localStorage.setItem(FORMS_KEY, JSON.stringify(forms));
+}
+function getForm(id) {
+  return loadForms().find((f) => f.id === id);
+}
+function upsertForm(form) {
+  const forms = loadForms();
+  const idx = forms.findIndex((f) => f.id === form.id);
+  form.updatedAt = new Date().toISOString();
+  if (idx >= 0) forms[idx] = form; else forms.push(form);
+  saveForms(forms);
+}
+function deleteForm(id) {
+  saveForms(loadForms().filter((f) => f.id !== id));
+}
 
-/* ---------- normalización para corrección ---------- */
 function normalizeText(s) {
   return String(s || "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
@@ -80,7 +73,8 @@ function defaultExampleForm() {
     subtitle: "Rotulado y escritura normalizada",
     comisiones: ["I. Biomed.", "I. Elect.", "I. Comp."],
     timeLimitMinutes: 15,
-    examStatus: "cerrado",
+    sheetWebAppUrl: "",
+    sheetViewUrl: "",
     createdAt: new Date().toISOString(),
     sections: [
       {
@@ -133,10 +127,11 @@ function defaultExampleForm() {
   return form;
 }
 
-function makeBlankForm(suggestedTitle) {
+function makeBlankForm() {
   return {
-    id: uid("form"), title: suggestedTitle || "Nuevo parcialito", subtitle: "",
-    comisiones: ["Comisión A"], timeLimitMinutes: null, examStatus: "cerrado",
+    id: uid("form"), title: "Nuevo parcialito", subtitle: "",
+    comisiones: ["Comisión A"], timeLimitMinutes: null,
+    sheetWebAppUrl: "", sheetViewUrl: "",
     createdAt: new Date().toISOString(), sections: [],
   };
 }
