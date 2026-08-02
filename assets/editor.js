@@ -678,22 +678,74 @@ function renderPublish() {
 
   const baseUrl = location.href.replace(/editor\.html.*$/, "");
 
+  form.comisionSchedules = form.comisionSchedules || {};
+
   form.comisiones.forEach((comision) => {
     const shareUrl = `${baseUrl}take.html?id=${encodeURIComponent(form.id)}&api=${encodeURIComponent(getApiUrl())}&comision=${encodeURIComponent(comision)}`;
     const qrImgUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&data=${encodeURIComponent(shareUrl)}`;
+    const own = form.comisionSchedules[comision] || { openAt: null, closeAt: null };
+    const isOpen = computeEffectiveExamStatus(form, comision) === "abierto";
+    const hasOwnSchedule = !!(own.openAt || own.closeAt);
 
     const card = document.createElement("div");
     card.className = "qr-card";
     card.innerHTML = `
       <span class="qr-card__com">${escapeHtml(comision)}</span>
+      <span class="result-badge ${isOpen ? "ok" : "bad"}" data-role="status">${isOpen ? "● Abierto" : "● Cerrado"}</span>
       <img src="${qrImgUrl}" width="180" height="180" alt="QR ${escapeHtml(comision)}" loading="lazy"
            onerror="this.replaceWith(Object.assign(document.createElement('p'),{className:'empty-note',textContent:'No se pudo generar la imagen del QR (revisá tu conexión) — usá el enlace de abajo.'}))">
       <div class="share-url-row">
         <input type="text" readonly value="${escapeHtml(shareUrl)}">
         <button class="btn btn-small btn-copy">Copiar</button>
+      </div>
+      <div style="width:100%; text-align:left;">
+        <label class="field-label" style="margin-top:10px; font-size:11px;">Horario propio de esta comisión (si lo dejás vacío, usa el horario general)</label>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <div>
+            <label class="field-label" style="margin-top:0; font-size:10px;">Apertura</label>
+            <input type="datetime-local" class="com-open" style="font-size:12px;">
+          </div>
+          <div>
+            <label class="field-label" style="margin-top:0; font-size:10px;">Cierre</label>
+            <input type="datetime-local" class="com-close" style="font-size:12px;">
+          </div>
+        </div>
+        <button class="btn btn-small btn-ghost com-clear" style="margin-top:6px;" ${hasOwnSchedule ? "" : "disabled"}>Quitar horario propio, usar el general</button>
       </div>`;
+
+    const openInput = card.querySelector(".com-open");
+    const closeInput = card.querySelector(".com-close");
+    const clearBtn = card.querySelector(".com-clear");
+    openInput.value = isoToLocalInputValue(own.openAt);
+    closeInput.value = isoToLocalInputValue(own.closeAt);
+
+    const refreshStatusBadge = () => {
+      const nowOpen = computeEffectiveExamStatus(form, comision) === "abierto";
+      const badge = card.querySelector('[data-role="status"]');
+      badge.textContent = nowOpen ? "● Abierto" : "● Cerrado";
+      badge.className = "result-badge " + (nowOpen ? "ok" : "bad");
+      const stillHasOwn = !!(form.comisionSchedules[comision]?.openAt || form.comisionSchedules[comision]?.closeAt);
+      clearBtn.disabled = !stillHasOwn;
+    };
+
+    openInput.onchange = () => {
+      form.comisionSchedules[comision] = form.comisionSchedules[comision] || { openAt: null, closeAt: null };
+      form.comisionSchedules[comision].openAt = localInputValueToIso(openInput.value);
+      persist(); refreshStatusBadge();
+    };
+    closeInput.onchange = () => {
+      form.comisionSchedules[comision] = form.comisionSchedules[comision] || { openAt: null, closeAt: null };
+      form.comisionSchedules[comision].closeAt = localInputValueToIso(closeInput.value);
+      persist(); refreshStatusBadge();
+    };
+    clearBtn.addEventListener("click", () => {
+      delete form.comisionSchedules[comision];
+      openInput.value = ""; closeInput.value = "";
+      persist(); refreshStatusBadge();
+    });
+
     card.querySelector(".btn-copy").addEventListener("click", () => {
-      const inp = card.querySelector("input");
+      const inp = card.querySelector('input[type="text"][readonly]');
       inp.select(); document.execCommand("copy");
     });
     grid.appendChild(card);
@@ -733,8 +785,9 @@ function renderExamStatus() {
   const endBtn = document.getElementById("btn-end-exam");
   const hasSchedule = !!(form.scheduledOpenAt || form.scheduledCloseAt);
   const isOpen = computeEffectiveExamStatus(form) === "abierto";
-  badge.textContent = isOpen ? "● Parcial ABIERTO — los alumnos ya pueden responder" : "● Parcial CERRADO";
-  if (hasSchedule) badge.textContent += " (por horario programado)";
+  badge.textContent = isOpen ? "● Parcial ABIERTO (general) — los alumnos ya pueden responder" : "● Parcial CERRADO (general)";
+  if (hasSchedule) badge.textContent += " · horario programado";
+  badge.title = "Este es el estado por defecto. Cada comisión puede tener su propio horario más abajo, que manda por sobre este.";
   badge.className = "result-badge " + (isOpen ? "ok" : "bad");
   startBtn.disabled = hasSchedule || isOpen;
   endBtn.disabled = hasSchedule || !isOpen;
