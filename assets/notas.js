@@ -56,7 +56,7 @@ function renderTable() {
   thead.innerHTML = `<tr>
       <th>N° Alumno</th><th>Nombre</th><th>Carrera</th><th>Comisión</th>
       ${forms.map((f) => `<th>${escapeHtml(f.title)}</th>`).join("")}
-      <th>Total</th>
+      <th>Total</th><th>Acciones</th>
     </tr>`;
   table.appendChild(thead);
 
@@ -77,8 +77,23 @@ function renderTable() {
       <td>${escapeHtml(s.carrera || "—")}</td>
       <td>${escapeHtml(s.comision)}</td>
       ${cells}
-      <td><b>${sumScore} / ${sumMax}</b></td>`;
+      <td><b>${sumScore} / ${sumMax}</b></td>
+      <td><button class="btn btn-small btn-danger btn-delete-student">Borrar alumno</button></td>`;
     tbody.appendChild(tr);
+
+    tr.querySelector(".btn-delete-student").addEventListener("click", async (ev) => {
+      if (!confirm(`¿Borrar TODO el historial de ${s.nombre || "este alumno"} (N° ${s.numeroAlumno})? Esto borra sus respuestas en todos los parcialitos y no se puede deshacer.`)) return;
+      const btn = ev.currentTarget;
+      btn.disabled = true; btn.textContent = "Borrando…";
+      try {
+        const res = await apiDeleteStudent(s.numeroAlumno);
+        if (!res.ok) throw new Error(res.error || "El servidor rechazó el borrado.");
+        load();
+      } catch (err) {
+        alert(`No se pudo borrar: ${err.message || err}. Revisá que la implementación de Apps Script esté actualizada (Implementar → Nueva versión) y volvé a intentar.`);
+        btn.disabled = false; btn.textContent = "Borrar alumno";
+      }
+    });
   });
   table.appendChild(tbody);
   container.innerHTML = "";
