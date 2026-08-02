@@ -189,6 +189,25 @@ function renderSectionCard(section, sIdx) {
   titleInp.type = "text"; titleInp.value = section.title;
   titleInp.addEventListener("input", () => { section.title = titleInp.value; persist(); });
   head.appendChild(titleInp);
+
+  const upSecBtn = document.createElement("button");
+  upSecBtn.className = "btn btn-small btn-ghost"; upSecBtn.textContent = "↑"; upSecBtn.title = "Mover sección arriba";
+  upSecBtn.disabled = sIdx === 0;
+  upSecBtn.addEventListener("click", () => {
+    [form.sections[sIdx - 1], form.sections[sIdx]] = [form.sections[sIdx], form.sections[sIdx - 1]];
+    persist(); renderBuilder();
+  });
+  head.appendChild(upSecBtn);
+
+  const downSecBtn = document.createElement("button");
+  downSecBtn.className = "btn btn-small btn-ghost"; downSecBtn.textContent = "↓"; downSecBtn.title = "Mover sección abajo";
+  downSecBtn.disabled = sIdx === form.sections.length - 1;
+  downSecBtn.addEventListener("click", () => {
+    [form.sections[sIdx + 1], form.sections[sIdx]] = [form.sections[sIdx], form.sections[sIdx + 1]];
+    persist(); renderBuilder();
+  });
+  head.appendChild(downSecBtn);
+
   const delSecBtn = document.createElement("button");
   delSecBtn.className = "btn btn-danger btn-small"; delSecBtn.textContent = "Eliminar sección";
   delSecBtn.addEventListener("click", () => {
@@ -232,6 +251,24 @@ function renderQuestionBlock(section, q, qIdx) {
   const head = document.createElement("div");
   head.className = "qblock__head";
   head.innerHTML = `<span class="qnum">${qIdx + 1}</span>`;
+
+  const upQBtn = document.createElement("button");
+  upQBtn.className = "btn btn-small btn-ghost"; upQBtn.textContent = "↑"; upQBtn.title = "Mover pregunta arriba";
+  upQBtn.disabled = qIdx === 0;
+  upQBtn.addEventListener("click", () => {
+    [section.questions[qIdx - 1], section.questions[qIdx]] = [section.questions[qIdx], section.questions[qIdx - 1]];
+    persist(); renderBuilder();
+  });
+  head.appendChild(upQBtn);
+
+  const downQBtn = document.createElement("button");
+  downQBtn.className = "btn btn-small btn-ghost"; downQBtn.textContent = "↓"; downQBtn.title = "Mover pregunta abajo";
+  downQBtn.disabled = qIdx === section.questions.length - 1;
+  downQBtn.addEventListener("click", () => {
+    [section.questions[qIdx + 1], section.questions[qIdx]] = [section.questions[qIdx], section.questions[qIdx + 1]];
+    persist(); renderBuilder();
+  });
+  head.appendChild(downQBtn);
 
   const typeSel = document.createElement("select");
   typeSel.className = "qtype-select";
