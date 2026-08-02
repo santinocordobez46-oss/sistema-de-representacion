@@ -34,6 +34,8 @@ async function apiCheck(formId, numeroAlumno, comision) { return apiGet("check",
 async function apiSubmit(payload) { return apiPost({ action: "submit", ...payload }); }
 async function apiResults(formId, comision) { return apiGet("results", comision ? { formId, comision } : { formId }); }
 async function apiNotas(comision) { return apiGet("notas", comision ? { comision } : {}); }
+async function apiDeleteResponse(formId, numeroAlumno, comision) { return apiPost({ action: "deleteresponse", formId, numeroAlumno, comision }); }
+async function apiDeleteStudent(numeroAlumno) { return apiPost({ action: "deletestudent", numeroAlumno }); }
 
 /* ---------- normalización para corrección ---------- */
 function normalizeText(s) {
