@@ -392,18 +392,26 @@ input:focus, textarea:focus, select:focus{ outline: 2px solid var(--blue); outli
 
 /* ---------- dashboard: grilla de formularios ---------- */
 .forms-grid{
-  display:grid; grid-template-columns: repeat(auto-fill, minmax(240px,1fr)); gap:16px;
+  display:grid; grid-template-columns: repeat(auto-fill, minmax(280px,1fr)); gap:16px;
 }
 .form-card{
   background: var(--panel); border: 1px solid var(--line-strong); border-radius: var(--radius);
   box-shadow: var(--shadow); padding: 16px; display:flex; flex-direction:column; gap:8px;
   cursor:pointer; transition: transform .1s ease, box-shadow .15s ease;
+  overflow: hidden;
 }
 .form-card:hover{ transform: translateY(-2px); box-shadow: 0 4px 10px rgba(20,35,43,.1), 0 14px 28px rgba(20,35,43,.08); }
 .form-card__tick{ font-family: var(--font-mono); font-size:10px; color:var(--blue); }
 .form-card__title{ font-family: var(--font-display); font-weight:600; font-size:17px; line-height:1.2; }
 .form-card__meta{ font-size:12px; color:var(--muted); display:flex; gap:10px; flex-wrap:wrap; }
-.form-card__actions{ display:flex; gap:6px; margin-top:auto; padding-top:8px; }
+.form-card__actions{
+  display:flex; flex-wrap: wrap; gap:6px; margin-top:auto; padding-top:8px;
+}
+.form-card__actions .btn{
+  flex: 1 1 calc(33% - 6px);
+  text-align: center;
+  white-space: nowrap;
+}
 .new-form-card{
   border: 2px dashed var(--line-strong); border-radius: var(--radius);
   display:flex; align-items:center; justify-content:center; min-height: 130px;
