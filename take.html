@@ -329,6 +329,22 @@ function renderTake(identity) {
   submitBtn.addEventListener("click", () => doSubmit(false));
   takeRoot.appendChild(submitBtn);
 
+  /* Traduce lo que el alumno marcó/escribió a texto legible ANTES de guardarlo,
+     usando las opciones del formulario tal como están en este mismo momento
+     (que es el único momento en que el ID de opción tiene garantía de
+     coincidir). Así el resultado queda legible para siempre, aunque el
+     profesor edite el parcialito más adelante. */
+  function humanizeGivenAnswer(q, given) {
+    if (given === undefined || given === null || given === "") return q.multiSelect ? "" : "";
+    if (q.type === "multiple_choice") {
+      const optMap = {};
+      (q.options || []).forEach((o) => { optMap[o.id] = o.text; });
+      if (Array.isArray(given)) return given.map((id) => optMap[id] || id).join(" + ");
+      return optMap[given] || String(given);
+    }
+    return String(given);
+  }
+
   function validateExactCounts() {
     for (const q of allQuestions) {
       if (q.multiSelect && q.requiredSelectionCount) {
@@ -360,7 +376,7 @@ function renderTake(identity) {
         correct = givenIds.length === correctIds.length && givenIds.every((id, i) => id === correctIds[i]);
       } else if (q.type === "multiple_choice") correct = given === q.correctOptionId;
       if (correct) score += Number(q.points) || 0;
-      detail.push({ pregunta: q.label, respuesta: JSON.stringify(given || (q.multiSelect ? [] : "")), correcta: correct, puntos: correct ? q.points : 0 });
+      detail.push({ pregunta: q.label, respuesta: humanizeGivenAnswer(q, given), correcta: correct, puntos: correct ? q.points : 0 });
       // nota: a propósito NO se le muestra al alumno cuál quedó correcta/incorrecta,
       // solo el puntaje final — el detalle completo queda para el profesor en Resultados.
     });
