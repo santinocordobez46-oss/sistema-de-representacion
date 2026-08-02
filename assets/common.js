@@ -57,13 +57,24 @@ function sortByComisionYNumero(list) {
 }
 
 /* ---------- estado efectivo del examen: manual + horario programado (opcional) ----------
-   Si se configuran fecha/hora de apertura y/o cierre, esas mandan por sobre los botones
-   manuales de Iniciar/Finalizar. Si no hay nada programado, manda el estado manual. */
-function computeEffectiveExamStatus(form) {
-  const now = new Date();
+   Cada comisión puede tener su propio horario (form.comisionSchedules[comision]).
+   Si esa comisión no tiene uno propio, se usa el horario general del formulario
+   (form.scheduledOpenAt / form.scheduledCloseAt) como respaldo. Si no hay nada
+   programado (ni por comisión ni general), manda el estado manual (examStatus). */
+function getScheduleFor(form, comision) {
+  const perComision = comision && form.comisionSchedules ? form.comisionSchedules[comision] : null;
+  if (perComision && (perComision.openAt || perComision.closeAt)) return perComision;
   if (form.scheduledOpenAt || form.scheduledCloseAt) {
-    const open = form.scheduledOpenAt ? new Date(form.scheduledOpenAt) : null;
-    const close = form.scheduledCloseAt ? new Date(form.scheduledCloseAt) : null;
+    return { openAt: form.scheduledOpenAt, closeAt: form.scheduledCloseAt };
+  }
+  return null;
+}
+function computeEffectiveExamStatus(form, comision) {
+  const now = new Date();
+  const sched = getScheduleFor(form, comision);
+  if (sched) {
+    const open = sched.openAt ? new Date(sched.openAt) : null;
+    const close = sched.closeAt ? new Date(sched.closeAt) : null;
     if (open && now < open) return "cerrado";
     if (close && now > close) return "cerrado";
     return "abierto";
