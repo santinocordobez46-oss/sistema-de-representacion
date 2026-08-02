@@ -145,15 +145,26 @@ function checkSubmitted_(formId, numeroAlumno) {
   return { ok: true, submitted: false };
 }
 
-/* Estado efectivo del examen: si hay horario programado, ese manda por sobre
-   los botones manuales de Iniciar/Finalizar. Si no hay nada programado, manda
-   el estado manual (examStatus). Debe reflejar exactamente la misma lógica
-   que computeEffectiveExamStatus() en assets/common.js del frontend. */
-function computeEffectiveExamStatus_(form) {
-  const now = new Date();
+/* Estado efectivo del examen: cada comisión puede tener su propio horario
+   (form.comisionSchedules[comision]); si esa comisión no tiene uno propio, se
+   usa el horario general del formulario como respaldo; si no hay nada
+   programado, manda el estado manual (examStatus). Debe reflejar exactamente
+   la misma lógica que computeEffectiveExamStatus() en assets/common.js del
+   frontend. */
+function getScheduleFor_(form, comision) {
+  const perComision = comision && form.comisionSchedules ? form.comisionSchedules[comision] : null;
+  if (perComision && (perComision.openAt || perComision.closeAt)) return perComision;
   if (form.scheduledOpenAt || form.scheduledCloseAt) {
-    const open = form.scheduledOpenAt ? new Date(form.scheduledOpenAt) : null;
-    const close = form.scheduledCloseAt ? new Date(form.scheduledCloseAt) : null;
+    return { openAt: form.scheduledOpenAt, closeAt: form.scheduledCloseAt };
+  }
+  return null;
+}
+function computeEffectiveExamStatus_(form, comision) {
+  const now = new Date();
+  const sched = getScheduleFor_(form, comision);
+  if (sched) {
+    const open = sched.openAt ? new Date(sched.openAt) : null;
+    const close = sched.closeAt ? new Date(sched.closeAt) : null;
     if (open && now < open) return "cerrado";
     if (close && now > close) return "cerrado";
     return "abierto";
@@ -166,7 +177,7 @@ function submitResponse_(data) {
   if (!formCheck.ok) {
     return { ok: false, error: "No se encontró el parcialito." };
   }
-  if (computeEffectiveExamStatus_(formCheck.form) !== "abierto") {
+  if (computeEffectiveExamStatus_(formCheck.form, data.comision) !== "abierto") {
     return { ok: false, error: "El profesor todavía no inició el parcial, o ya lo finalizó. No se guardó la respuesta." };
   }
   const already = checkSubmitted_(data.formId, data.numeroAlumno);
