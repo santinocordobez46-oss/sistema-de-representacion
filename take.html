@@ -86,7 +86,7 @@ async function boot() {
     } catch (e) { /* si el dato local está corrupto, seguimos como si no hubiera nada */ }
   }
 
-  if (computeEffectiveExamStatus(form) !== "abierto") {
+  if (computeEffectiveExamStatus(form, fixedComision) !== "abierto") {
     renderWaitingRoom();
   } else {
     renderIdentity();
@@ -108,7 +108,7 @@ function renderWaitingRoom() {
       const data = await res.json();
       if (data.ok) form = data.form;
     } catch (e) { /* reintenta igual en el próximo ciclo */ }
-    if (computeEffectiveExamStatus(form) === "abierto") renderIdentity();
+    if (computeEffectiveExamStatus(form, fixedComision) === "abierto") renderIdentity();
     else renderWaitingRoom();
   }, 4000);
 }
