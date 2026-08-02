@@ -56,7 +56,7 @@ function getFormulariosSheet_() {
 
 function doGet(e) {
   const action = e.parameter.action;
-  if (action === "check") return jsonOut_(checkSubmitted_(e.parameter.formId, e.parameter.numeroAlumno, e.parameter.comision));
+  if (action === "check") return jsonOut_(checkSubmitted_(e.parameter.formId, e.parameter.numeroAlumno));
   if (action === "results") return jsonOut_(getResults_(e.parameter.formId, e.parameter.comision));
   if (action === "notas") return jsonOut_(getNotas_(e.parameter.comision));
   if (action === "listforms") return jsonOut_(listForms_());
@@ -70,7 +70,7 @@ function doPost(e) {
     if (data.action === "submit") return jsonOut_(submitResponse_(data));
     if (data.action === "saveform") return jsonOut_(saveForm_(data.form));
     if (data.action === "deleteform") return jsonOut_(deleteForm_(data.formId));
-    if (data.action === "deleteresponse") return jsonOut_(deleteResponse_(data.formId, data.numeroAlumno, data.comision));
+    if (data.action === "deleteresponse") return jsonOut_(deleteResponse_(data.formId, data.numeroAlumno));
     return jsonOut_({ ok: false, error: "Acción no reconocida" });
   } catch (err) {
     return jsonOut_({ ok: false, error: String(err) });
@@ -133,13 +133,12 @@ function deleteForm_(formId) {
 
 /* ---------------- Respuestas ---------------- */
 
-function checkSubmitted_(formId, numeroAlumno, comision) {
+function checkSubmitted_(formId, numeroAlumno) {
   const sheet = getRespuestasSheet_();
   const rows = sheet.getDataRange().getValues();
   for (let i = 1; i < rows.length; i++) {
     if (String(rows[i][0]) === String(formId) &&
-        String(rows[i][3]).trim() === String(numeroAlumno).trim() &&
-        String(rows[i][2]).trim() === String(comision).trim()) {
+        String(rows[i][3]).trim() === String(numeroAlumno).trim()) {
       return { ok: true, submitted: true };
     }
   }
@@ -170,9 +169,9 @@ function submitResponse_(data) {
   if (computeEffectiveExamStatus_(formCheck.form) !== "abierto") {
     return { ok: false, error: "El profesor todavía no inició el parcial, o ya lo finalizó. No se guardó la respuesta." };
   }
-  const already = checkSubmitted_(data.formId, data.numeroAlumno, data.comision);
+  const already = checkSubmitted_(data.formId, data.numeroAlumno);
   if (already.submitted) {
-    return { ok: false, error: "Este número de alumno ya tiene una respuesta registrada para este parcialito en esta comisión." };
+    return { ok: false, error: "Este número de alumno ya tiene una respuesta registrada para este parcialito (en cualquier comisión)." };
   }
   const sheet = getRespuestasSheet_();
   sheet.appendRow([
@@ -183,13 +182,12 @@ function submitResponse_(data) {
   return { ok: true };
 }
 
-function deleteResponse_(formId, numeroAlumno, comision) {
+function deleteResponse_(formId, numeroAlumno) {
   const sheet = getRespuestasSheet_();
   const rows = sheet.getDataRange().getValues();
   for (let i = rows.length - 1; i >= 1; i--) {
     if (String(rows[i][0]) === String(formId) &&
-        String(rows[i][3]).trim() === String(numeroAlumno).trim() &&
-        String(rows[i][2]).trim() === String(comision).trim()) {
+        String(rows[i][3]).trim() === String(numeroAlumno).trim()) {
       sheet.deleteRow(i + 1);
     }
   }
@@ -214,7 +212,11 @@ function getResults_(formId, comision) {
   return { ok: true, rows: out };
 }
 
-/* libro de notas: TODOS los parcialitos, pivotado por alumno */
+/* libro de notas: TODOS los parcialitos, pivotado por alumno.
+   El identificador es SOLO el N° de Alumno (no depende de la comisión), para
+   que la misma persona quede vinculada a través del tiempo aunque haya
+   rendido distintos parciales en distintas comisiones. Se muestra la
+   comisión/carrera más reciente que declaró. */
 function getNotas_(comision) {
   const sheet = getRespuestasSheet_();
   const rows = sheet.getDataRange().getValues();
@@ -222,14 +224,19 @@ function getNotas_(comision) {
   const order = {};
   forms.forEach((f, idx) => { order[f.id] = { title: f.title, idx }; });
 
-  const students = {}; // key = numeroAlumno + "|" + comision
+  const students = {}; // key = numeroAlumno (identificador único del sistema)
   for (let i = 1; i < rows.length; i++) {
     const r = rows[i];
     const com = String(r[2]).trim();
     if (comision && com !== String(comision).trim()) continue;
-    const key = String(r[3]).trim() + "|" + com;
+    const key = String(r[3]).trim();
     if (!students[key]) {
       students[key] = { numeroAlumno: r[3], nombre: r[4], comision: com, carrera: r[10] || "", parciales: {} };
+    } else {
+      // se actualiza con lo último declarado, por si cambió de comisión/carrera entre parciales
+      students[key].nombre = r[4] || students[key].nombre;
+      students[key].comision = com || students[key].comision;
+      students[key].carrera = r[10] || students[key].carrera;
     }
     students[key].parciales[r[0]] = { formTitle: r[1], score: r[5], totalPoints: r[6] };
   }
