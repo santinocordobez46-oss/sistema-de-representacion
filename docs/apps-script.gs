@@ -71,6 +71,7 @@ function doPost(e) {
     if (data.action === "saveform") return jsonOut_(saveForm_(data.form));
     if (data.action === "deleteform") return jsonOut_(deleteForm_(data.formId));
     if (data.action === "deleteresponse") return jsonOut_(deleteResponse_(data.formId, data.numeroAlumno));
+    if (data.action === "deletestudent") return jsonOut_(deleteStudent_(data.numeroAlumno));
     return jsonOut_({ ok: false, error: "Acción no reconocida" });
   } catch (err) {
     return jsonOut_({ ok: false, error: String(err) });
@@ -203,6 +204,24 @@ function deleteResponse_(formId, numeroAlumno) {
     }
   }
   return { ok: true };
+}
+
+/* Borra TODAS las respuestas de un alumno (en cualquier parcialito y comisión).
+   Se usa desde el Libro de notas para limpiar alumnos viejos o cargados por
+   error, ya que ahí se ve el historial completo, no uno por parcialito. */
+function deleteStudent_(numeroAlumno) {
+  if (!numeroAlumno) return { ok: false, error: "Falta el N° de alumno." };
+  const sheet = getRespuestasSheet_();
+  const rows = sheet.getDataRange().getValues();
+  let deleted = 0;
+  for (let i = rows.length - 1; i >= 1; i--) {
+    if (String(rows[i][3]).trim() === String(numeroAlumno).trim()) {
+      sheet.deleteRow(i + 1);
+      deleted++;
+    }
+  }
+  if (deleted === 0) return { ok: false, error: "No se encontró ninguna respuesta con ese N° de alumno." };
+  return { ok: true, deleted };
 }
 
 function getResults_(formId, comision) {
