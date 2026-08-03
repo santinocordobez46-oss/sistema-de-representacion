@@ -181,29 +181,52 @@ function submitResponse_(data) {
   if (computeEffectiveExamStatus_(formCheck.form, data.comision) !== "abierto") {
     return { ok: false, error: "El profesor todavía no inició el parcial, o ya lo finalizó. No se guardó la respuesta." };
   }
-  const already = checkSubmitted_(data.formId, data.numeroAlumno);
-  if (already.submitted) {
-    return { ok: false, error: "Este número de alumno ya tiene una respuesta registrada para este parcialito (en cualquier comisión)." };
+  // Bloqueo: si varios alumnos envían casi al mismo tiempo, esto evita que dos
+  // envíos se procesen a la vez y se pisen entre sí en la planilla (por ejemplo,
+  // que ambos pasen el chequeo de "ya respondió" antes de que se guarde el otro).
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+  } catch (e) {
+    return { ok: false, error: "El sistema está ocupado guardando otra respuesta en este momento. Esperá unos segundos y volvé a tocar Enviar." };
   }
-  const sheet = getRespuestasSheet_();
-  sheet.appendRow([
-    data.formId, data.formTitle, data.comision, data.numeroAlumno, data.nombre,
-    data.score, data.totalPoints, new Date(), data.tabSwitches || 0, JSON.stringify(data.detail || []),
-    data.carrera || "", data.mail || "", JSON.stringify(data.extra || {}),
-  ]);
-  return { ok: true };
+  try {
+    const already = checkSubmitted_(data.formId, data.numeroAlumno);
+    if (already.submitted) {
+      return { ok: false, error: "Este número de alumno ya tiene una respuesta registrada para este parcialito (en cualquier comisión)." };
+    }
+    const sheet = getRespuestasSheet_();
+    sheet.appendRow([
+      data.formId, data.formTitle, data.comision, data.numeroAlumno, data.nombre,
+      data.score, data.totalPoints, new Date(), data.tabSwitches || 0, JSON.stringify(data.detail || []),
+      data.carrera || "", data.mail || "", JSON.stringify(data.extra || {}),
+    ]);
+    return { ok: true };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function deleteResponse_(formId, numeroAlumno) {
-  const sheet = getRespuestasSheet_();
-  const rows = sheet.getDataRange().getValues();
-  for (let i = rows.length - 1; i >= 1; i--) {
-    if (String(rows[i][0]) === String(formId) &&
-        String(rows[i][3]).trim() === String(numeroAlumno).trim()) {
-      sheet.deleteRow(i + 1);
-    }
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+  } catch (e) {
+    return { ok: false, error: "El sistema está ocupado en este momento, volvé a intentar en unos segundos." };
   }
-  return { ok: true };
+  try {
+    const sheet = getRespuestasSheet_();
+    const rows = sheet.getDataRange().getValues();
+    for (let i = rows.length - 1; i >= 1; i--) {
+      if (String(rows[i][0]) === String(formId) &&
+          String(rows[i][3]).trim() === String(numeroAlumno).trim()) {
+        sheet.deleteRow(i + 1);
+      }
+    }
+    return { ok: true };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 /* Borra TODAS las respuestas de un alumno (en cualquier parcialito y comisión).
@@ -211,17 +234,27 @@ function deleteResponse_(formId, numeroAlumno) {
    error, ya que ahí se ve el historial completo, no uno por parcialito. */
 function deleteStudent_(numeroAlumno) {
   if (!numeroAlumno) return { ok: false, error: "Falta el N° de alumno." };
-  const sheet = getRespuestasSheet_();
-  const rows = sheet.getDataRange().getValues();
-  let deleted = 0;
-  for (let i = rows.length - 1; i >= 1; i--) {
-    if (String(rows[i][3]).trim() === String(numeroAlumno).trim()) {
-      sheet.deleteRow(i + 1);
-      deleted++;
-    }
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+  } catch (e) {
+    return { ok: false, error: "El sistema está ocupado en este momento, volvé a intentar en unos segundos." };
   }
-  if (deleted === 0) return { ok: false, error: "No se encontró ninguna respuesta con ese N° de alumno." };
-  return { ok: true, deleted };
+  try {
+    const sheet = getRespuestasSheet_();
+    const rows = sheet.getDataRange().getValues();
+    let deleted = 0;
+    for (let i = rows.length - 1; i >= 1; i--) {
+      if (String(rows[i][3]).trim() === String(numeroAlumno).trim()) {
+        sheet.deleteRow(i + 1);
+        deleted++;
+      }
+    }
+    if (deleted === 0) return { ok: false, error: "No se encontró ninguna respuesta con ese N° de alumno." };
+    return { ok: true, deleted };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function getResults_(formId, comision) {
