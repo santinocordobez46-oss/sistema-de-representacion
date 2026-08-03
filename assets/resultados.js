@@ -79,7 +79,7 @@ function renderTable() {
   const table = document.createElement("table");
   table.className = "results-table";
   table.innerHTML = `<thead><tr>
-      <th>N° Alumno</th><th>Nombre</th><th>Carrera</th><th>Comisión</th><th>Puntaje</th><th>Fecha/Hora</th><th>Cambios de pantalla</th><th>Acciones</th>
+      <th>N° Alumno</th><th>Nombre</th><th>Carrera</th><th>Comisión</th><th>Mail</th><th>Puntaje</th><th>Fecha/Hora</th><th>Cambios de pantalla</th><th>Acciones</th>
     </tr></thead>`;
   const tbody = document.createElement("tbody");
   rows.forEach((r) => {
@@ -90,6 +90,7 @@ function renderTable() {
       <td>${escapeHtml(r.nombre)}</td>
       <td>${escapeHtml(r.carrera || "—")}</td>
       <td>${escapeHtml(r.comision)}</td>
+      <td>${escapeHtml(r.mail || "—")}</td>
       <td><span class="score-pill ${pct >= 0.6 ? "high" : "low"}">${r.score} / ${r.totalPoints}</span></td>
       <td>${new Date(r.fecha).toLocaleString("es-AR")}</td>
       <td>${r.tabSwitches || 0}</td>
@@ -168,7 +169,7 @@ document.getElementById("btn-export-xlsx").addEventListener("click", () => {
   // algún alumno tenga un detalle incompleto.
   const questions = rForm.sections.flatMap((s) => s.questions);
 
-  const headerBase = ["N° Alumno", "Nombre", "Carrera", "Comisión"];
+  const headerBase = ["N° Alumno", "Nombre", "Carrera", "Comisión", "Mail"];
   // Encabezado en dos líneas dentro de la misma celda: "P1 (2 pts)" arriba y
   // el enunciado completo abajo, para que el profe sepa qué se pidió sin
   // tener que abrir el editor por separado.
@@ -183,7 +184,7 @@ document.getElementById("btn-export-xlsx").addEventListener("click", () => {
       return d ? humanizeAnswer(q, d.respuesta) : "";
     });
     aoa.push([
-      r.numeroAlumno, r.nombre, r.carrera || "", r.comision,
+      r.numeroAlumno, r.nombre, r.carrera || "", r.comision, r.mail || "",
       ...answerCells,
       r.score, r.totalPoints, new Date(r.fecha).toLocaleString("es-AR"), r.tabSwitches || 0,
     ]);
@@ -215,7 +216,7 @@ document.getElementById("btn-export-xlsx").addEventListener("click", () => {
   });
 
   ws["!cols"] = [
-    { wch: 10 }, { wch: 22 }, { wch: 16 }, { wch: 14 },
+    { wch: 10 }, { wch: 22 }, { wch: 16 }, { wch: 14 }, { wch: 24 },
     ...questions.map(() => ({ wch: 26 })),
     { wch: 9 }, { wch: 14 }, { wch: 18 }, { wch: 10 },
   ];
