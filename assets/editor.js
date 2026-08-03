@@ -662,6 +662,93 @@ function renderTake() {
    PUBLICAR — un QR por comisión, generado con un servicio de imagen
    directo (más robusto que depender de una librería JS de terceros)
    ============================================================ */
+/* ---------- tarjeta descargable de QR (estilo cartel: fondo negro, texto blanco) ----------
+   Usa el MISMO QR que ya se ve en pantalla (misma URL de api.qrserver.com),
+   solo lo compone dentro de un cartel más prolijo para imprimir/compartir. */
+function roundRectPath(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+function drawWrappedText(ctx, text, cx, y, maxWidth, lineHeight, font, color) {
+  ctx.font = font; ctx.fillStyle = color; ctx.textAlign = "center";
+  const words = String(text).split(/\s+/).filter(Boolean);
+  const lines = [];
+  let current = "";
+  words.forEach((w) => {
+    const test = current ? current + " " + w : w;
+    if (ctx.measureText(test).width > maxWidth && current) { lines.push(current); current = w; }
+    else current = test;
+  });
+  if (current) lines.push(current);
+  lines.forEach((line, i) => ctx.fillText(line, cx, y + i * lineHeight));
+  return lines.length * lineHeight;
+}
+async function downloadQrCard(form, comision, qrImgUrl) {
+  try { if (document.fonts && document.fonts.ready) await document.fonts.ready; } catch (e) {}
+
+  const W = 720, H = 960;
+  const canvas = document.createElement("canvas");
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext("2d");
+
+  roundRectPath(ctx, 0, 0, W, H, 46);
+  ctx.fillStyle = "#0c0b16";
+  ctx.fill();
+
+  ctx.save();
+  roundRectPath(ctx, 0, 0, W, H, 46);
+  ctx.clip();
+  ctx.fillStyle = "#4f46e5";
+  ctx.fillRect(0, 0, W, 10);
+  ctx.restore();
+
+  let y = 100;
+  y += drawWrappedText(ctx, "COMISIÓN", W / 2, y, W - 100, 56, "800 46px 'Space Grotesk', sans-serif", "#ffffff");
+  y += drawWrappedText(ctx, String(comision).toUpperCase(), W / 2, y + 6, W - 100, 60, "800 50px 'Space Grotesk', sans-serif", "#ffffff");
+
+  const qrSize = 460;
+  const qrX = (W - qrSize) / 2;
+  const qrY = 250;
+  roundRectPath(ctx, qrX, qrY, qrSize, qrSize, 18);
+  ctx.fillStyle = "#ffffff";
+  ctx.fill();
+
+  try {
+    const img = await new Promise((resolve, reject) => {
+      const im = new Image();
+      im.crossOrigin = "anonymous";
+      im.onload = () => resolve(im);
+      im.onerror = reject;
+      im.src = qrImgUrl;
+    });
+    const pad = 26;
+    ctx.drawImage(img, qrX + pad, qrY + pad, qrSize - pad * 2, qrSize - pad * 2);
+  } catch (e) {
+    ctx.fillStyle = "#c33"; ctx.font = "16px sans-serif"; ctx.textAlign = "center";
+    ctx.fillText("No se pudo cargar el QR", W / 2, qrY + qrSize / 2);
+  }
+
+  let by = qrY + qrSize + 86;
+  by += drawWrappedText(ctx, String(form.title || "Parcialito").toUpperCase(), W / 2, by, W - 90, 50, "800 40px 'Space Grotesk', sans-serif", "#ffffff");
+  if (form.subtitle) {
+    drawWrappedText(ctx, form.subtitle, W / 2, by + 14, W - 90, 36, "500 24px 'IBM Plex Sans', sans-serif", "#c9c6dc");
+  }
+
+  canvas.toBlob((blob) => {
+    if (!blob) { alert("No se pudo generar la imagen. Probá de nuevo."); return; }
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    const slug = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+    a.download = `${slug(form.title)}-${slug(comision)}.png`;
+    a.click();
+  }, "image/png");
+}
+
 function renderPublish() {
   renderExamStatus();
   renderSchedule();
@@ -698,6 +785,7 @@ function renderPublish() {
         <input type="text" readonly value="${escapeHtml(shareUrl)}">
         <button class="btn btn-small btn-copy">Copiar</button>
       </div>
+      <button class="btn btn-small btn-download-card" style="width:100%;">🖼 Descargar tarjeta para compartir</button>
       <div style="width:100%; text-align:left;">
         <label class="field-label" style="margin-top:10px; font-size:11px;">Horario propio de esta comisión (si lo dejás vacío, usa el horario general)</label>
         <div style="display:flex; gap:8px; flex-wrap:wrap;">
@@ -747,6 +835,17 @@ function renderPublish() {
     card.querySelector(".btn-copy").addEventListener("click", () => {
       const inp = card.querySelector('input[type="text"][readonly]');
       inp.select(); document.execCommand("copy");
+    });
+    card.querySelector(".btn-download-card").addEventListener("click", async (ev) => {
+      const btn = ev.currentTarget;
+      const original = btn.textContent;
+      btn.disabled = true; btn.textContent = "Generando…";
+      try {
+        await downloadQrCard(form, comision, qrImgUrl);
+      } catch (e) {
+        alert("No se pudo generar la tarjeta. Probá de nuevo.");
+      }
+      btn.disabled = false; btn.textContent = original;
     });
     grid.appendChild(card);
   });
