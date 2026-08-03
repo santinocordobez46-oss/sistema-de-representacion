@@ -691,7 +691,7 @@ function drawWrappedText(ctx, text, cx, y, maxWidth, lineHeight, font, color) {
 async function downloadQrCard(form, comision, qrImgUrl) {
   try { if (document.fonts && document.fonts.ready) await document.fonts.ready; } catch (e) {}
 
-  const W = 720, H = 960;
+  const W = 720, H = 820;
   const canvas = document.createElement("canvas");
   canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext("2d");
@@ -707,13 +707,9 @@ async function downloadQrCard(form, comision, qrImgUrl) {
   ctx.fillRect(0, 0, W, 10);
   ctx.restore();
 
-  let y = 100;
-  y += drawWrappedText(ctx, "COMISIÓN", W / 2, y, W - 100, 56, "800 46px 'Space Grotesk', sans-serif", "#ffffff");
-  y += drawWrappedText(ctx, String(comision).toUpperCase(), W / 2, y + 6, W - 100, 60, "800 50px 'Space Grotesk', sans-serif", "#ffffff");
-
   const qrSize = 460;
   const qrX = (W - qrSize) / 2;
-  const qrY = 250;
+  const qrY = 90;
   roundRectPath(ctx, qrX, qrY, qrSize, qrSize, 18);
   ctx.fillStyle = "#ffffff";
   ctx.fill();
