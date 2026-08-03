@@ -160,72 +160,78 @@ function plainQuestionText(label) {
     .trim();
 }
 
-document.getElementById("btn-export-xlsx").addEventListener("click", () => {
+document.getElementById("btn-export-xlsx").addEventListener("click", async (ev) => {
   if (allRows.length === 0) { alert("No hay datos para exportar todavía."); return; }
-  const rows = sortByComisionYNumero(allRows);
+  const btn = ev.currentTarget;
+  const original = btn.textContent;
+  btn.disabled = true; btn.textContent = "Generando…";
+  try {
+    const rows = sortByComisionYNumero(allRows);
 
-  // Las preguntas se toman del propio formulario (no de las respuestas) para
-  // asegurar el mismo orden y las mismas columnas en todas las filas, aunque
-  // algún alumno tenga un detalle incompleto.
-  const questions = rForm.sections.flatMap((s) => s.questions);
+    // Las preguntas se toman del propio formulario (no de las respuestas) para
+    // asegurar el mismo orden y las mismas columnas en todas las filas, aunque
+    // algún alumno tenga un detalle incompleto.
+    const questions = rForm.sections.flatMap((s) => s.questions);
 
-  const headerBase = ["N° Alumno", "Nombre", "Carrera", "Comisión", "Mail"];
-  // Encabezado en dos líneas dentro de la misma celda: "P1 (2 pts)" arriba y
-  // el enunciado completo abajo, para que el profe sepa qué se pidió sin
-  // tener que abrir el editor por separado.
-  const headerQuestions = questions.map((q, i) => `P${i + 1} (${q.points} pts)\n${plainQuestionText(q.label)}`);
-  const headerEnd = ["Puntaje", "Puntaje Máximo", "Fecha/Hora", "Cambios de pantalla"];
-  const header = [...headerBase, ...headerQuestions, ...headerEnd];
+    const headerBase = ["N° Alumno", "Nombre", "Carrera", "Comisión", "Mail"];
+    // Encabezado en dos líneas dentro de la misma celda: "P1 (2 pts)" arriba y
+    // el enunciado completo abajo, para que el profe sepa qué se pidió sin
+    // tener que abrir el editor por separado.
+    const headerQuestions = questions.map((q, i) => `P${i + 1} (${q.points} pts)\n${plainQuestionText(q.label)}`);
+    const headerEnd = ["Puntaje", "Puntaje Máximo", "Fecha/Hora", "Cambios de pantalla"];
+    const header = [...headerBase, ...headerQuestions, ...headerEnd];
 
-  const aoa = [header];
-  rows.forEach((r) => {
-    const answerCells = questions.map((q, i) => {
-      const d = (r.detail || [])[i];
-      return d ? humanizeAnswer(q, d.respuesta) : "";
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet("Resultados");
+    ws.addRow(header);
+    rows.forEach((r) => {
+      const answerCells = questions.map((q, i) => {
+        const d = (r.detail || [])[i];
+        return d ? humanizeAnswer(q, d.respuesta) : "";
+      });
+      ws.addRow([
+        r.numeroAlumno, r.nombre, r.carrera || "", r.comision, r.mail || "",
+        ...answerCells,
+        r.score, r.totalPoints, new Date(r.fecha).toLocaleString("es-AR"), r.tabSwitches || 0,
+      ]);
     });
-    aoa.push([
-      r.numeroAlumno, r.nombre, r.carrera || "", r.comision, r.mail || "",
-      ...answerCells,
-      r.score, r.totalPoints, new Date(r.fecha).toLocaleString("es-AR"), r.tabSwitches || 0,
-    ]);
-  });
 
-  const ws = XLSX.utils.aoa_to_sheet(aoa);
-
-  const headerStyle = {
-    font: { bold: true, color: { rgb: "FFFFFF" } },
-    fill: { fgColor: { rgb: "4F46E5" } },
-    alignment: { horizontal: "center", vertical: "top", wrapText: true },
-  };
-  const greenFill = { fill: { fgColor: { rgb: "C6EFCE" } }, font: { color: { rgb: "006100" } } };
-  const redFill = { fill: { fgColor: { rgb: "FFC7CE" } }, font: { color: { rgb: "9C0006" } } };
-
-  header.forEach((_, c) => {
-    const ref = XLSX.utils.encode_cell({ r: 0, c });
-    if (ws[ref]) ws[ref].s = headerStyle;
-  });
-
-  const firstQCol = headerBase.length;
-  rows.forEach((r, rIdx) => {
-    questions.forEach((q, qIdx) => {
-      const d = (r.detail || [])[qIdx];
-      if (!d) return;
-      const ref = XLSX.utils.encode_cell({ r: rIdx + 1, c: firstQCol + qIdx });
-      if (ws[ref]) ws[ref].s = d.correcta ? greenFill : redFill;
+    const headerRow = ws.getRow(1);
+    headerRow.height = 60;
+    headerRow.eachCell((cell) => {
+      cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF4F46E5" } };
+      cell.alignment = { horizontal: "center", vertical: "top", wrapText: true };
     });
-  });
 
-  ws["!cols"] = [
-    { wch: 10 }, { wch: 22 }, { wch: 16 }, { wch: 14 }, { wch: 24 },
-    ...questions.map(() => ({ wch: 26 })),
-    { wch: 9 }, { wch: 14 }, { wch: 18 }, { wch: 10 },
-  ];
-  // Fila de encabezado más alta para que se alcance a leer el enunciado completo
-  ws["!rows"] = [{ hpt: 60 }];
+    const widths = [10, 22, 16, 14, 24, ...questions.map(() => 26), 9, 14, 18, 10];
+    widths.forEach((w, i) => { ws.getColumn(i + 1).width = w; });
 
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Resultados");
-  XLSX.writeFile(wb, `${(rForm.title || "resultados").toLowerCase().replace(/[^a-z0-9]+/g, "-")}.xlsx`);
+    const firstQCol = headerBase.length; // 0-based; +1 para columnas de ExcelJS (que arrancan en 1)
+    rows.forEach((r, rIdx) => {
+      questions.forEach((q, qIdx) => {
+        const d = (r.detail || [])[qIdx];
+        if (!d) return;
+        const cell = ws.getRow(rIdx + 2).getCell(firstQCol + qIdx + 1);
+        cell.fill = {
+          type: "pattern", pattern: "solid",
+          fgColor: { argb: d.correcta ? "FFC6EFCE" : "FFFFC7CE" },
+        };
+        cell.font = { color: { argb: d.correcta ? "FF006100" : "FF9C0006" } };
+      });
+    });
+
+    const buffer = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `${(rForm.title || "resultados").toLowerCase().replace(/[^a-z0-9]+/g, "-")}.xlsx`;
+    a.click();
+  } catch (err) {
+    alert("No se pudo generar el Excel (" + (err.message || err) + "). No se descargó ningún archivo — probá de nuevo, y si sigue fallando avisame.");
+  } finally {
+    btn.disabled = false; btn.textContent = original;
+  }
 });
 
 init();
