@@ -91,7 +91,7 @@ function renderTable() {
       <td>${escapeHtml(r.carrera || "—")}</td>
       <td>${escapeHtml(r.comision)}</td>
       <td>${escapeHtml(r.mail || "—")}</td>
-      <td><span class="score-pill ${pct >= 0.6 ? "high" : "low"}">${formatNota(r.score, r.totalPoints)} <small style="opacity:.7; font-weight:400;">(${r.score}/${r.totalPoints} pts)</small></span></td>
+      <td><span class="score-pill ${pct >= 0.6 ? "high" : "low"}">${formatNota(r.score, r.totalPoints)}</span></td>
       <td>${new Date(r.fecha).toLocaleString("es-AR")}</td>
       <td>${r.tabSwitches || 0}</td>
       <td style="white-space:nowrap;">
