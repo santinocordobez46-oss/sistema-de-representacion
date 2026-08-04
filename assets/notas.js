@@ -68,7 +68,7 @@ function renderTable() {
       if (!p) return `<td style="color:var(--muted);">—</td>`;
       sumScore += Number(p.score) || 0; sumMax += Number(p.totalPoints) || 0;
       const pct = p.totalPoints > 0 ? p.score / p.totalPoints : 0;
-      return `<td><span class="score-pill ${pct >= 0.6 ? "high" : "low"}">${formatNota(p.score, p.totalPoints)} <small style="opacity:.7;font-weight:400;">(${p.score}/${p.totalPoints})</small></span></td>`;
+      return `<td><span class="score-pill ${pct >= 0.6 ? "high" : "low"}">${formatNota(p.score, p.totalPoints)}</span></td>`;
     }).join("");
     const tr = document.createElement("tr");
     tr.innerHTML = `
@@ -77,7 +77,7 @@ function renderTable() {
       <td>${escapeHtml(s.carrera || "—")}</td>
       <td>${escapeHtml(s.comision)}</td>
       ${cells}
-      <td><b>${formatNota(sumScore, sumMax)}</b> <small style="opacity:.7;">(${sumScore}/${sumMax} pts)</small></td>
+      <td><b>${formatNota(sumScore, sumMax)}</b></td>
       <td><button class="btn btn-small btn-danger btn-delete-student">Borrar alumno</button></td>`;
     tbody.appendChild(tr);
 
