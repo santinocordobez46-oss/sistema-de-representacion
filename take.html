@@ -80,7 +80,7 @@ async function boot() {
       identityRoot.innerHTML = "";
       const panel = document.createElement("div");
       panel.className = "score-panel";
-      panel.innerHTML = `<span>Ya enviaste tu respuesta</span><span class="num">${info.score} / ${info.totalPoints}</span>`;
+      panel.innerHTML = `<span>Ya enviaste tu respuesta</span><span class="num">${formatNota(info.score, info.totalPoints)}</span>`;
       identityRoot.appendChild(panel);
       return;
     } catch (e) { /* si el dato local está corrupto, seguimos como si no hubiera nada */ }
@@ -429,7 +429,7 @@ function renderTake(identity) {
             numeroAlumno: identity.numeroAlumno, comision: identity.comision, score, totalPoints, ts: Date.now(),
           }));
           panel.className = "score-panel";
-          panel.innerHTML = `<span>${auto ? "Tiempo agotado — envío automático" : "Puntaje obtenido"}</span><span class="num">${score} / ${totalPoints}</span>`;
+          panel.innerHTML = `<span>${auto ? "Tiempo agotado — envío automático" : "Nota obtenida"}</span><span class="num">${formatNota(score, totalPoints)}</span>`;
           takeRoot.appendChild(panel);
           const note = document.createElement("p");
           note.className = "hint"; note.style.cssText = "font-size:12px;color:var(--muted);margin-top:10px;";
