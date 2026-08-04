@@ -212,6 +212,19 @@ function escapeHtml(str) {
    Sintaxis simple tipo markdown: **negrita**, *cursiva/inclinada*, __subrayado__.
    Siempre se aplica DESPUÉS de escapeHtml(), nunca antes, para que no se pueda
    inyectar HTML real a través del enunciado. */
+/* ---------- nota en escala de 1 a 10 (proporcional al puntaje máximo) ----------
+   Sirve tanto para un parcialito de 10 puntos como uno de 20, 35, etc. —
+   siempre se saca la regla de tres y se redondea a 1 decimal. */
+function scoreToNota(score, totalPoints) {
+  const total = Number(totalPoints) || 0;
+  if (total <= 0) return 0;
+  const raw = (Number(score) / total) * 10;
+  return Math.round(raw * 10) / 10;
+}
+function formatNota(score, totalPoints) {
+  return scoreToNota(score, totalPoints).toFixed(1).replace(/\.0$/, "").replace(".", ",");
+}
+
 function formatRichText(escapedText) {
   return String(escapedText)
     .replace(/\*\*(.+?)\*\*/g, "<b>$1</b>")
