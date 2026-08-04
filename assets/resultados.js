@@ -91,7 +91,7 @@ function renderTable() {
       <td>${escapeHtml(r.carrera || "—")}</td>
       <td>${escapeHtml(r.comision)}</td>
       <td>${escapeHtml(r.mail || "—")}</td>
-      <td><span class="score-pill ${pct >= 0.6 ? "high" : "low"}">${r.score} / ${r.totalPoints}</span></td>
+      <td><span class="score-pill ${pct >= 0.6 ? "high" : "low"}">${formatNota(r.score, r.totalPoints)} <small style="opacity:.7; font-weight:400;">(${r.score}/${r.totalPoints} pts)</small></span></td>
       <td>${new Date(r.fecha).toLocaleString("es-AR")}</td>
       <td>${r.tabSwitches || 0}</td>
       <td style="white-space:nowrap;">
@@ -209,7 +209,7 @@ document.getElementById("btn-export-xlsx").addEventListener("click", (ev) => {
 
     const headerBase = ["N° Alumno", "Nombre", "Carrera", "Comisión", "Mail"];
     const headerQuestions = questions.map((q, i) => `P${i + 1} (${q.points} pts) - ${plainQuestionText(q.label)}`);
-    const headerEnd = ["Puntaje", "Puntaje Máximo", "Fecha/Hora", "Cambios de pantalla"];
+    const headerEnd = ["Puntaje", "Puntaje Máximo", "Nota (1-10)", "Fecha/Hora", "Cambios de pantalla"];
     const header = [...headerBase, ...headerQuestions, ...headerEnd];
 
     const aoa = [header];
@@ -222,7 +222,7 @@ document.getElementById("btn-export-xlsx").addEventListener("click", (ev) => {
       aoa.push([
         r.numeroAlumno, r.nombre, r.carrera || "", r.comision, r.mail || "",
         ...answerCells,
-        r.score, r.totalPoints, new Date(r.fecha).toLocaleString("es-AR"), r.tabSwitches || 0,
+        r.score, r.totalPoints, scoreToNota(r.score, r.totalPoints), new Date(r.fecha).toLocaleString("es-AR"), r.tabSwitches || 0,
       ]);
     });
 
@@ -230,7 +230,7 @@ document.getElementById("btn-export-xlsx").addEventListener("click", (ev) => {
     ws["!cols"] = [
       { wch: 10 }, { wch: 22 }, { wch: 16 }, { wch: 14 }, { wch: 24 },
       ...questions.map(() => ({ wch: 32 })),
-      { wch: 9 }, { wch: 14 }, { wch: 18 }, { wch: 10 },
+      { wch: 9 }, { wch: 14 }, { wch: 12 }, { wch: 18 }, { wch: 10 },
     ];
 
     const wb = XLSX.utils.book_new();
