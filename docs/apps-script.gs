@@ -28,6 +28,15 @@
 const SHEET_RESPUESTAS = "Respuestas";
 const SHEET_FORMULARIOS = "Formularios";
 
+/* Normaliza el N° de alumno para comparar: saca espacios y ceros a la
+   izquierda. Esto es necesario porque Google Sheets a veces detecta que
+   "007" es un número y lo guarda como 7, perdiendo los ceros — sin esto,
+   una comparación de texto exacta no encontraría esas filas. */
+function normNum_(v) {
+  const s = String(v == null ? "" : v).trim();
+  return s.replace(/^0+(?=\d)/, "");
+}
+
 function getRespuestasSheet_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sheet = ss.getSheetByName(SHEET_RESPUESTAS);
@@ -141,7 +150,7 @@ function checkSubmitted_(formId, numeroAlumno) {
   const rows = sheet.getDataRange().getValues();
   for (let i = 1; i < rows.length; i++) {
     if (String(rows[i][0]) === String(formId) &&
-        String(rows[i][3]).trim() === String(numeroAlumno).trim()) {
+        normNum_(rows[i][3]) === normNum_(numeroAlumno)) {
       return { ok: true, submitted: true };
     }
   }
@@ -156,7 +165,7 @@ function lookupStudent_(numeroAlumno) {
   const sheet = getRespuestasSheet_();
   const rows = sheet.getDataRange().getValues();
   for (let i = rows.length - 1; i >= 1; i--) {
-    if (String(rows[i][3]).trim() === String(numeroAlumno).trim()) {
+    if (normNum_(rows[i][3]) === normNum_(numeroAlumno)) {
       return {
         ok: true, found: true,
         nombre: rows[i][4] || "", carrera: rows[i][10] || "", mail: rows[i][11] || "",
@@ -183,7 +192,7 @@ function updateResponseStudent_(formId, numeroAlumnoOriginal, numeroAlumnoNuevo,
     let targetRow = -1;
     for (let i = 1; i < rows.length; i++) {
       if (String(rows[i][0]) === String(formId) &&
-          String(rows[i][3]).trim() === String(numeroAlumnoOriginal).trim()) {
+          normNum_(rows[i][3]) === normNum_(numeroAlumnoOriginal)) {
         targetRow = i;
         break;
       }
@@ -193,7 +202,7 @@ function updateResponseStudent_(formId, numeroAlumnoOriginal, numeroAlumnoNuevo,
     if (String(numeroAlumnoNuevo).trim() !== String(numeroAlumnoOriginal).trim()) {
       for (let i = 1; i < rows.length; i++) {
         if (i !== targetRow && String(rows[i][0]) === String(formId) &&
-            String(rows[i][3]).trim() === String(numeroAlumnoNuevo).trim()) {
+            normNum_(rows[i][3]) === normNum_(numeroAlumnoNuevo)) {
           return { ok: false, error: `Ya existe otra respuesta con el N° ${numeroAlumnoNuevo} en este mismo parcialito. Borrá esa antes, o elegí otro número.` };
         }
       }
@@ -280,7 +289,7 @@ function deleteResponse_(formId, numeroAlumno) {
     const rows = sheet.getDataRange().getValues();
     for (let i = rows.length - 1; i >= 1; i--) {
       if (String(rows[i][0]) === String(formId) &&
-          String(rows[i][3]).trim() === String(numeroAlumno).trim()) {
+          normNum_(rows[i][3]) === normNum_(numeroAlumno)) {
         sheet.deleteRow(i + 1);
       }
     }
@@ -306,7 +315,7 @@ function deleteStudent_(numeroAlumno) {
     const rows = sheet.getDataRange().getValues();
     let deleted = 0;
     for (let i = rows.length - 1; i >= 1; i--) {
-      if (String(rows[i][3]).trim() === String(numeroAlumno).trim()) {
+      if (normNum_(rows[i][3]) === normNum_(numeroAlumno)) {
         sheet.deleteRow(i + 1);
         deleted++;
       }
