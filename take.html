@@ -143,7 +143,11 @@ function renderIdentity() {
     if (!/^\d{3}$/.test(num)) { checkMsg.textContent = "Ingresá tus 3 dígitos primero."; checkMsg.style.color = "var(--accent-strong)"; return; }
     checkBtn.disabled = true; checkBtn.textContent = "Buscando…";
     try {
-      const res = await apiLookupStudent(num);
+      const url = new URL(takeApiUrl);
+      url.searchParams.set("action", "lookupstudent");
+      url.searchParams.set("numeroAlumno", num);
+      const fetchRes = await fetch(url.toString());
+      const res = await fetchRes.json();
       if (res.ok && res.found) {
         if (nameInp && res.nombre) nameInp.value = res.nombre;
         if (carreraSel && res.carrera) carreraSel.value = res.carrera;
