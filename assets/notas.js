@@ -68,7 +68,7 @@ function renderTable() {
       if (!p) return `<td style="color:var(--muted);">—</td>`;
       sumScore += Number(p.score) || 0; sumMax += Number(p.totalPoints) || 0;
       const pct = p.totalPoints > 0 ? p.score / p.totalPoints : 0;
-      return `<td><span class="score-pill ${pct >= 0.6 ? "high" : "low"}">${p.score}/${p.totalPoints}</span></td>`;
+      return `<td><span class="score-pill ${pct >= 0.6 ? "high" : "low"}">${formatNota(p.score, p.totalPoints)} <small style="opacity:.7;font-weight:400;">(${p.score}/${p.totalPoints})</small></span></td>`;
     }).join("");
     const tr = document.createElement("tr");
     tr.innerHTML = `
@@ -77,7 +77,7 @@ function renderTable() {
       <td>${escapeHtml(s.carrera || "—")}</td>
       <td>${escapeHtml(s.comision)}</td>
       ${cells}
-      <td><b>${sumScore} / ${sumMax}</b></td>
+      <td><b>${formatNota(sumScore, sumMax)}</b> <small style="opacity:.7;">(${sumScore}/${sumMax} pts)</small></td>
       <td><button class="btn btn-small btn-danger btn-delete-student">Borrar alumno</button></td>`;
     tbody.appendChild(tr);
 
@@ -112,10 +112,12 @@ document.getElementById("btn-export-xlsx").addEventListener("click", () => {
     let sumScore = 0, sumMax = 0;
     forms.forEach((f) => {
       const p = s.parciales[f.id];
-      row[f.title] = p ? `${p.score}/${p.totalPoints}` : "—";
+      row[`${f.title} - Nota`] = p ? scoreToNota(p.score, p.totalPoints) : "—";
+      row[`${f.title} - Puntaje`] = p ? `${p.score}/${p.totalPoints}` : "—";
       if (p) { sumScore += Number(p.score) || 0; sumMax += Number(p.totalPoints) || 0; }
     });
-    row["Total"] = `${sumScore}/${sumMax}`;
+    row["Nota Total"] = scoreToNota(sumScore, sumMax);
+    row["Puntaje Total"] = `${sumScore}/${sumMax}`;
     return row;
   });
   const ws = XLSX.utils.json_to_sheet(data);
