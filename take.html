@@ -130,8 +130,38 @@ function renderIdentity() {
 
   const numField = document.createElement("div");
   numField.innerHTML = `<label class="field-label">N° de alumno (3 dígitos, ej. 007)</label>`;
+  const numRow = document.createElement("div");
+  numRow.style.cssText = "display:flex; gap:8px; align-items:center;";
   const numInp = document.createElement("input"); numInp.type = "text"; numInp.inputMode = "numeric"; numInp.maxLength = 3;
-  numField.appendChild(numInp); card.appendChild(numField);
+  numInp.style.flex = "1";
+  const checkBtn = document.createElement("button");
+  checkBtn.type = "button"; checkBtn.className = "btn btn-small"; checkBtn.textContent = "Comprobar";
+  const checkMsg = document.createElement("div");
+  checkMsg.style.cssText = "font-size:12px; margin-top:4px;";
+  checkBtn.addEventListener("click", async () => {
+    const num = numInp.value.trim();
+    if (!/^\d{3}$/.test(num)) { checkMsg.textContent = "Ingresá tus 3 dígitos primero."; checkMsg.style.color = "var(--accent-strong)"; return; }
+    checkBtn.disabled = true; checkBtn.textContent = "Buscando…";
+    try {
+      const res = await apiLookupStudent(num);
+      if (res.ok && res.found) {
+        if (nameInp && res.nombre) nameInp.value = res.nombre;
+        if (carreraSel && res.carrera) carreraSel.value = res.carrera;
+        if (mailInp && res.mail) mailInp.value = res.mail;
+        checkMsg.textContent = "Te reconocimos de un parcialito anterior — completamos tus datos.";
+        checkMsg.style.color = "var(--good)";
+      } else {
+        checkMsg.textContent = "No encontramos ese N° todavía, completá tus datos manualmente.";
+        checkMsg.style.color = "var(--muted)";
+      }
+    } catch (e) {
+      checkMsg.textContent = "No se pudo comprobar en este momento.";
+      checkMsg.style.color = "var(--accent-strong)";
+    }
+    checkBtn.disabled = false; checkBtn.textContent = "Comprobar";
+  });
+  numRow.appendChild(numInp); numRow.appendChild(checkBtn);
+  numField.appendChild(numRow); numField.appendChild(checkMsg); card.appendChild(numField);
 
   let mailInp = null;
   if (cfg.showMail) {
