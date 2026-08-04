@@ -86,8 +86,8 @@ function renderTable() {
     const pct = r.totalPoints > 0 ? r.score / r.totalPoints : 0;
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td>${escapeHtml(r.numeroAlumno)}</td>
-      <td>${escapeHtml(r.nombre)}</td>
+      <td class="cell-numero">${escapeHtml(r.numeroAlumno)}</td>
+      <td class="cell-nombre">${escapeHtml(r.nombre)}</td>
       <td>${escapeHtml(r.carrera || "—")}</td>
       <td>${escapeHtml(r.comision)}</td>
       <td>${escapeHtml(r.mail || "—")}</td>
@@ -96,6 +96,7 @@ function renderTable() {
       <td>${r.tabSwitches || 0}</td>
       <td style="white-space:nowrap;">
         <button class="btn btn-small btn-detail">Ver detalle</button>
+        <button class="btn btn-small btn-edit-row">Editar N°</button>
         <button class="btn btn-small btn-danger btn-delete-row">Borrar</button>
       </td>`;
     tbody.appendChild(tr);
@@ -103,7 +104,7 @@ function renderTable() {
     const detailTr = document.createElement("tr");
     detailTr.style.display = "none";
     const detailTd = document.createElement("td");
-    detailTd.colSpan = 8;
+    detailTd.colSpan = 9;
     detailTd.style.background = "#fafbfb";
     if (r.detail && r.detail.length > 0) {
       const detailTable = document.createElement("table");
@@ -127,6 +128,39 @@ function renderTable() {
       const isHidden = detailTr.style.display === "none";
       detailTr.style.display = isHidden ? "table-row" : "none";
     });
+    tr.querySelector(".btn-edit-row").addEventListener("click", (ev) => {
+      const editBtn = ev.currentTarget;
+      const numCell = tr.querySelector(".cell-numero");
+      const nombreCell = tr.querySelector(".cell-nombre");
+      const originalNumero = r.numeroAlumno;
+      numCell.innerHTML = `<input type="text" class="edit-numero" style="width:80px;" value="${escapeHtml(originalNumero)}">`;
+      nombreCell.innerHTML = `<input type="text" class="edit-nombre" style="width:140px;" value="${escapeHtml(r.nombre)}">`;
+      editBtn.textContent = "Guardar";
+      editBtn.classList.remove("btn-edit-row");
+      editBtn.classList.add("btn-save-row");
+      const cancelBtn = document.createElement("button");
+      cancelBtn.className = "btn btn-small btn-ghost";
+      cancelBtn.textContent = "Cancelar";
+      cancelBtn.style.marginLeft = "4px";
+      editBtn.after(cancelBtn);
+      cancelBtn.addEventListener("click", () => load());
+
+      editBtn.addEventListener("click", async () => {
+        const nuevoNumero = tr.querySelector(".edit-numero").value.trim();
+        const nuevoNombre = tr.querySelector(".edit-nombre").value.trim();
+        if (!nuevoNumero) { alert("El N° de alumno no puede quedar vacío."); return; }
+        editBtn.disabled = true; editBtn.textContent = "Guardando…";
+        try {
+          const res = await apiUpdateResponse(rForm.id, originalNumero, nuevoNumero, nuevoNombre);
+          if (!res.ok) throw new Error(res.error || "El servidor rechazó el cambio.");
+          load();
+        } catch (err) {
+          alert(`No se pudo guardar: ${err.message || err}. Revisá que la implementación de Apps Script esté actualizada (Implementar → Nueva versión) y volvé a intentar.`);
+          editBtn.disabled = false; editBtn.textContent = "Guardar";
+        }
+      }, { once: true });
+    }, { once: true });
+
     tr.querySelector(".btn-delete-row").addEventListener("click", async (ev) => {
       if (!confirm(`¿Borrar la respuesta de ${r.nombre || "este alumno"} (N° ${r.numeroAlumno})? No se puede deshacer.`)) return;
       const btn = ev.currentTarget;
@@ -182,7 +216,8 @@ document.getElementById("btn-export-xlsx").addEventListener("click", (ev) => {
     rows.forEach((r) => {
       const answerCells = questions.map((q, i) => {
         const d = (r.detail || [])[i];
-        return d ? humanizeAnswer(q, d.respuesta) : "";
+        if (!d) return "";
+        return `${humanizeAnswer(q, d.respuesta)} ${d.correcta ? "✓" : "✗"}`;
       });
       aoa.push([
         r.numeroAlumno, r.nombre, r.carrera || "", r.comision, r.mail || "",
