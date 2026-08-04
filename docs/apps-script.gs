@@ -61,6 +61,7 @@ function doGet(e) {
   if (action === "notas") return jsonOut_(getNotas_(e.parameter.comision));
   if (action === "listforms") return jsonOut_(listForms_());
   if (action === "getform") return jsonOut_(getFormById_(e.parameter.formId));
+  if (action === "lookupstudent") return jsonOut_(lookupStudent_(e.parameter.numeroAlumno));
   return jsonOut_({ ok: false, error: "Acción no reconocida" });
 }
 
@@ -72,6 +73,7 @@ function doPost(e) {
     if (data.action === "deleteform") return jsonOut_(deleteForm_(data.formId));
     if (data.action === "deleteresponse") return jsonOut_(deleteResponse_(data.formId, data.numeroAlumno));
     if (data.action === "deletestudent") return jsonOut_(deleteStudent_(data.numeroAlumno));
+    if (data.action === "updateresponse") return jsonOut_(updateResponseStudent_(data.formId, data.numeroAlumnoOriginal, data.numeroAlumnoNuevo, data.nombreNuevo));
     return jsonOut_({ ok: false, error: "Acción no reconocida" });
   } catch (err) {
     return jsonOut_({ ok: false, error: String(err) });
@@ -144,6 +146,65 @@ function checkSubmitted_(formId, numeroAlumno) {
     }
   }
   return { ok: true, submitted: false };
+}
+
+/* Busca si ese N° de alumno ya respondió ALGÚN parcialito antes (en cualquier
+   comisión) y devuelve sus datos (nombre, carrera, mail) para autocompletar.
+   Se queda con la fila más reciente si respondió más de un parcialito. */
+function lookupStudent_(numeroAlumno) {
+  if (!numeroAlumno) return { ok: true, found: false };
+  const sheet = getRespuestasSheet_();
+  const rows = sheet.getDataRange().getValues();
+  for (let i = rows.length - 1; i >= 1; i--) {
+    if (String(rows[i][3]).trim() === String(numeroAlumno).trim()) {
+      return {
+        ok: true, found: true,
+        nombre: rows[i][4] || "", carrera: rows[i][10] || "", mail: rows[i][11] || "",
+      };
+    }
+  }
+  return { ok: true, found: false };
+}
+
+/* Corrige el N° de alumno (y opcionalmente el nombre) de una respuesta ya
+   guardada, para cuando un alumno lo escribió mal o quedó duplicado. No deja
+   pisar a otro alumno que ya tenga ese número en el MISMO parcialito. */
+function updateResponseStudent_(formId, numeroAlumnoOriginal, numeroAlumnoNuevo, nombreNuevo) {
+  if (!numeroAlumnoNuevo) return { ok: false, error: "El N° de alumno no puede quedar vacío." };
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+  } catch (e) {
+    return { ok: false, error: "El sistema está ocupado en este momento, volvé a intentar en unos segundos." };
+  }
+  try {
+    const sheet = getRespuestasSheet_();
+    const rows = sheet.getDataRange().getValues();
+    let targetRow = -1;
+    for (let i = 1; i < rows.length; i++) {
+      if (String(rows[i][0]) === String(formId) &&
+          String(rows[i][3]).trim() === String(numeroAlumnoOriginal).trim()) {
+        targetRow = i;
+        break;
+      }
+    }
+    if (targetRow === -1) return { ok: false, error: "No se encontró esa respuesta (puede que ya se haya actualizado)." };
+
+    if (String(numeroAlumnoNuevo).trim() !== String(numeroAlumnoOriginal).trim()) {
+      for (let i = 1; i < rows.length; i++) {
+        if (i !== targetRow && String(rows[i][0]) === String(formId) &&
+            String(rows[i][3]).trim() === String(numeroAlumnoNuevo).trim()) {
+          return { ok: false, error: `Ya existe otra respuesta con el N° ${numeroAlumnoNuevo} en este mismo parcialito. Borrá esa antes, o elegí otro número.` };
+        }
+      }
+    }
+
+    sheet.getRange(targetRow + 1, 4).setValue(numeroAlumnoNuevo); // columna D: N° Alumno
+    if (nombreNuevo) sheet.getRange(targetRow + 1, 5).setValue(nombreNuevo); // columna E: Nombre
+    return { ok: true };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 /* Estado efectivo del examen: cada comisión puede tener su propio horario
