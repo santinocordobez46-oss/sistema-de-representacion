@@ -112,12 +112,10 @@ document.getElementById("btn-export-xlsx").addEventListener("click", () => {
     let sumScore = 0, sumMax = 0;
     forms.forEach((f) => {
       const p = s.parciales[f.id];
-      row[`${f.title} - Nota`] = p ? scoreToNota(p.score, p.totalPoints) : "—";
-      row[`${f.title} - Puntaje`] = p ? `${p.score}/${p.totalPoints}` : "—";
+      row[f.title] = p ? scoreToNota(p.score, p.totalPoints) : "—";
       if (p) { sumScore += Number(p.score) || 0; sumMax += Number(p.totalPoints) || 0; }
     });
     row["Nota Total"] = scoreToNota(sumScore, sumMax);
-    row["Puntaje Total"] = `${sumScore}/${sumMax}`;
     return row;
   });
   const ws = XLSX.utils.json_to_sheet(data);
