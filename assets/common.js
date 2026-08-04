@@ -36,6 +36,10 @@ async function apiResults(formId, comision) { return apiGet("results", comision 
 async function apiNotas(comision) { return apiGet("notas", comision ? { comision } : {}); }
 async function apiDeleteResponse(formId, numeroAlumno, comision) { return apiPost({ action: "deleteresponse", formId, numeroAlumno, comision }); }
 async function apiDeleteStudent(numeroAlumno) { return apiPost({ action: "deletestudent", numeroAlumno }); }
+async function apiLookupStudent(numeroAlumno) { return apiGet("lookupstudent", { numeroAlumno }); }
+async function apiUpdateResponse(formId, numeroAlumnoOriginal, numeroAlumnoNuevo, nombreNuevo) {
+  return apiPost({ action: "updateresponse", formId, numeroAlumnoOriginal, numeroAlumnoNuevo, nombreNuevo });
+}
 
 /* ---------- normalización para corrección ---------- */
 function normalizeText(s) {
