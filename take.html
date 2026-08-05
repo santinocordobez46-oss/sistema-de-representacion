@@ -41,7 +41,9 @@ const fixedComision = qp.get("comision") ? decodeURIComponent(qp.get("comision")
 const SUBMITTED_KEY_PREFIX = "parcialito_submitted_";
 
 let form = null;
-let tabSwitches = 0;
+let tabSwitchesByQuestion = {}; // { [questionId]: cantidad de veces que salió estando en esa pregunta }
+let tabSwitchesGeneral = 0; // cambios de pantalla antes de llegar a alguna pregunta (pantalla de identidad)
+let currentQuestionId = null; // qué pregunta se está mostrando ahora mismo (para saber a quién sumarle el cambio)
 let timerInterval = null;
 const identityRoot = document.getElementById("identity-root");
 const takeRoot = document.getElementById("take-root");
@@ -278,18 +280,23 @@ function setupWatermark(nombre, numeroAlumno) {
   }
 }
 
-document.addEventListener("visibilitychange", () => { if (document.hidden) tabSwitches++; });
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) return;
+  if (currentQuestionId) tabSwitchesByQuestion[currentQuestionId] = (tabSwitchesByQuestion[currentQuestionId] || 0) + 1;
+  else tabSwitchesGeneral++;
+});
 
 function renderTake(identity) {
   takeRoot.innerHTML = "";
   const answers = {};
-  const allQuestions = form.sections.flatMap((s) => s.questions);
+  const allQuestions = form.sections.flatMap((s) => s.questions.map((q) => Object.assign({}, q, { __sectionTitle: s.title })));
   const totalPoints = allQuestions.reduce((a, q) => a + (Number(q.points) || 0), 0);
+  let qIndex = 0;
+  let timerBadge = null;
 
   if (form.timeLimitMinutes) {
-    const badge = document.createElement("div");
-    badge.className = "timer-badge"; badge.id = "timer-badge";
-    takeRoot.appendChild(badge);
+    timerBadge = document.createElement("div");
+    timerBadge.className = "timer-badge"; timerBadge.id = "timer-badge";
     let secondsLeft = form.timeLimitMinutes * 60;
     updateTimer();
     timerInterval = setInterval(() => {
@@ -298,70 +305,129 @@ function renderTake(identity) {
     }, 1000);
     function updateTimer() {
       const m = Math.floor(secondsLeft / 60), s = secondsLeft % 60;
-      badge.textContent = `⏱ ${m}:${String(s).padStart(2, "0")}`;
-      badge.classList.toggle("warn", secondsLeft <= 60);
+      timerBadge.textContent = `⏱ ${m}:${String(s).padStart(2, "0")}`;
+      timerBadge.classList.toggle("warn", secondsLeft <= 60);
     }
   }
 
-  form.sections.forEach((section) => {
-    const secTitle = document.createElement("h3");
-    secTitle.style.fontFamily = "var(--font-display)"; secTitle.style.margin = "22px 0 10px";
-    secTitle.textContent = section.title;
+  // Traba de "volver atrás" del navegador: cada vez que avanzamos, empujamos
+  // un estado nuevo al historial. Si el alumno toca "atrás" del navegador,
+  // en vez de volver, lo empujamos de nuevo para adelante. No es 100%
+  // infalible (nada del lado del navegador lo es), pero cubre el caso común.
+  history.pushState({ take: true, q: 0 }, "", location.href);
+  window.addEventListener("popstate", () => { history.pushState({ take: true, q: qIndex }, "", location.href); });
+
+  renderQuestionPage();
+
+  function renderQuestionPage() {
+    takeRoot.innerHTML = "";
+    if (timerBadge) takeRoot.appendChild(timerBadge);
+
+    const progress = document.createElement("div");
+    progress.style.cssText = "font-family:var(--font-mono);font-size:12px;color:var(--muted);margin-bottom:10px;";
+    progress.textContent = `Pregunta ${qIndex + 1} de ${allQuestions.length}`;
+    takeRoot.appendChild(progress);
+
+    const q = allQuestions[qIndex];
+    currentQuestionId = q.id;
+
+    const secTitle = document.createElement("div");
+    secTitle.style.cssText = "font-family:var(--font-display);font-weight:600;font-size:13px;color:var(--blue-strong);margin-bottom:6px;";
+    secTitle.textContent = q.__sectionTitle;
     takeRoot.appendChild(secTitle);
 
-    section.questions.forEach((q) => {
-      const card = document.createElement("div");
-      card.className = "take-question"; card.dataset.qid = q.id;
-      const lbl = document.createElement("div");
-      lbl.className = "take-question__label"; lbl.innerHTML = formatRichText(escapeHtml(q.label || "(sin enunciado)"));
-      card.appendChild(lbl);
-      const pts = document.createElement("div");
-      pts.className = "take-question__points"; pts.textContent = `Valor: ${q.points} punto(s)`;
-      if (q.multiSelect && q.requiredSelectionCount) pts.textContent += ` — marcá exactamente ${q.requiredSelectionCount} opción(es)`;
-      card.appendChild(pts);
-      if (q.image) { const img = document.createElement("img"); img.className = "q-img"; img.src = q.image; card.appendChild(img); }
+    const card = document.createElement("div");
+    card.className = "take-question"; card.dataset.qid = q.id;
+    const lbl = document.createElement("div");
+    lbl.className = "take-question__label"; lbl.innerHTML = formatRichText(escapeHtml(q.label || "(sin enunciado)"));
+    card.appendChild(lbl);
+    const pts = document.createElement("div");
+    pts.className = "take-question__points"; pts.textContent = `Valor: ${q.points} punto(s)`;
+    if (q.multiSelect && q.requiredSelectionCount) pts.textContent += ` — marcá exactamente ${q.requiredSelectionCount} opción(es)`;
+    card.appendChild(pts);
+    if (q.image) { const img = document.createElement("img"); img.className = "q-img"; img.src = q.image; card.appendChild(img); }
 
-      if (q.type === "short_text" || q.type === "number") {
-        const inp = document.createElement("input");
-        inp.type = "text";
-        inp.addEventListener("input", () => { answers[q.id] = inp.value; });
-        card.appendChild(inp);
-      } else if (q.multiSelect) {
-        answers[q.id] = [];
-        q.options.forEach((opt) => {
-          const row = document.createElement("label"); row.className = "choice-row";
-          const check = document.createElement("input");
-          check.type = "checkbox"; check.value = opt.id;
-          check.addEventListener("change", () => {
-            if (check.checked) answers[q.id].push(opt.id);
-            else answers[q.id] = answers[q.id].filter((id) => id !== opt.id);
-          });
-          row.appendChild(check);
-          const span = document.createElement("span"); span.textContent = opt.text;
-          row.appendChild(span);
-          card.appendChild(row);
+    if (q.type === "short_text" || q.type === "number") {
+      const inp = document.createElement("input");
+      inp.type = "text";
+      inp.value = answers[q.id] || "";
+      inp.addEventListener("input", () => { answers[q.id] = inp.value; });
+      card.appendChild(inp);
+    } else if (q.multiSelect) {
+      answers[q.id] = answers[q.id] || [];
+      const limitMsg = document.createElement("div");
+      limitMsg.style.cssText = "font-size:12px;color:var(--accent-strong);margin-top:6px;display:none;";
+      q.options.forEach((opt) => {
+        const row = document.createElement("label"); row.className = "choice-row";
+        const check = document.createElement("input");
+        check.type = "checkbox"; check.value = opt.id;
+        check.checked = answers[q.id].includes(opt.id);
+        check.addEventListener("change", () => {
+          if (check.checked && q.requiredSelectionCount && answers[q.id].length >= q.requiredSelectionCount) {
+            check.checked = false;
+            limitMsg.textContent = `Ya marcaste el máximo de ${q.requiredSelectionCount} opción(es) — destildá una para elegir otra.`;
+            limitMsg.style.display = "block";
+            return;
+          }
+          limitMsg.style.display = "none";
+          if (check.checked) answers[q.id].push(opt.id);
+          else answers[q.id] = answers[q.id].filter((id) => id !== opt.id);
         });
-      } else {
-        q.options.forEach((opt) => {
-          const row = document.createElement("label"); row.className = "choice-row";
-          const radio = document.createElement("input");
-          radio.type = "radio"; radio.name = "take_" + q.id; radio.value = opt.id;
-          radio.addEventListener("change", () => { answers[q.id] = opt.id; });
-          row.appendChild(radio);
-          const span = document.createElement("span"); span.textContent = opt.text;
-          row.appendChild(span);
-          card.appendChild(row);
-        });
-      }
-      takeRoot.appendChild(card);
+        row.appendChild(check);
+        const span = document.createElement("span"); span.textContent = opt.text;
+        row.appendChild(span);
+        card.appendChild(row);
+      });
+      card.appendChild(limitMsg);
+    } else {
+      q.options.forEach((opt) => {
+        const row = document.createElement("label"); row.className = "choice-row";
+        const radio = document.createElement("input");
+        radio.type = "radio"; radio.name = "take_" + q.id; radio.value = opt.id;
+        radio.checked = answers[q.id] === opt.id;
+        radio.addEventListener("change", () => { answers[q.id] = opt.id; });
+        row.appendChild(radio);
+        const span = document.createElement("span"); span.textContent = opt.text;
+        row.appendChild(span);
+        card.appendChild(row);
+      });
+    }
+    takeRoot.appendChild(card);
+
+    const isLast = qIndex === allQuestions.length - 1;
+    const nextBtn = document.createElement("button");
+    nextBtn.className = "btn btn-accent"; nextBtn.style.marginTop = "14px";
+    nextBtn.textContent = isLast ? "Enviar respuestas" : "Siguiente →";
+    nextBtn.addEventListener("click", () => {
+      if (!validateCurrentQuestion(q)) return;
+      if (isLast) { doSubmit(false); return; }
+      qIndex++;
+      history.pushState({ take: true, q: qIndex }, "", location.href);
+      renderQuestionPage();
     });
-  });
+    takeRoot.appendChild(nextBtn);
 
-  const submitBtn = document.createElement("button");
-  submitBtn.className = "btn btn-accent"; submitBtn.style.marginTop = "10px";
-  submitBtn.textContent = "Enviar respuestas";
-  submitBtn.addEventListener("click", () => doSubmit(false));
-  takeRoot.appendChild(submitBtn);
+    const hint = document.createElement("p");
+    hint.className = "hint"; hint.style.cssText = "font-size:11px;color:var(--muted);margin-top:8px;";
+    hint.textContent = "Una vez que avanzás no podés volver a esta pregunta.";
+    takeRoot.appendChild(hint);
+  }
+
+  function validateCurrentQuestion(q) {
+    const given = answers[q.id];
+    if (q.multiSelect && q.requiredSelectionCount) {
+      const count = (given || []).length;
+      if (count !== q.requiredSelectionCount) {
+        alert(`Tenés que marcar exactamente ${q.requiredSelectionCount} opción(es). Marcaste ${count}.`);
+        return false;
+      }
+    }
+    if (q.required !== false) {
+      const empty = given === undefined || given === null || given === "" || (Array.isArray(given) && given.length === 0);
+      if (empty) { alert("Esta pregunta es obligatoria — respondela antes de continuar."); return false; }
+    }
+    return true;
+  }
 
   /* Traduce lo que el alumno marcó/escribió a texto legible ANTES de guardarlo,
      usando las opciones del formulario tal como están en este mismo momento
@@ -379,41 +445,24 @@ function renderTake(identity) {
     return String(given);
   }
 
-  function validateExactCounts() {
-    for (const q of allQuestions) {
-      if (q.multiSelect && q.requiredSelectionCount) {
-        const given = answers[q.id] || [];
-        if (given.length !== q.requiredSelectionCount) {
-          alert(`En la pregunta "${q.label}" tenés que marcar exactamente ${q.requiredSelectionCount} opción(es). Marcaste ${given.length}.`);
-          return false;
-        }
-      }
-    }
-    return true;
-  }
-
   function doSubmit(auto) {
-    if (!auto && !validateExactCounts()) return;
     if (timerInterval) clearInterval(timerInterval);
-    submitBtn.disabled = true;
-    submitBtn.textContent = "Enviando…";
+    const activeBtn = takeRoot.querySelector("button.btn-accent");
+    if (activeBtn) { activeBtn.disabled = true; activeBtn.textContent = "Enviando…"; }
+
     let score = 0;
     const detail = [];
     allQuestions.forEach((q) => {
       const given = answers[q.id];
-      let correct = false;
-      if (q.type === "short_text") correct = (q.acceptedAnswers || []).some((a) => normalizeText(a) === normalizeText(given));
-      else if (q.type === "number") { const g = normalizeNumber(given); correct = g !== null && (q.acceptedAnswers || []).some((a) => normalizeNumber(a) === g); }
-      else if (q.multiSelect) {
-        const givenIds = (given || []).slice().sort();
-        const correctIds = (q.correctOptionIds || []).slice().sort();
-        correct = givenIds.length === correctIds.length && givenIds.every((id, i) => id === correctIds[i]);
-      } else if (q.type === "multiple_choice") correct = given === q.correctOptionId;
-      if (correct) score += Number(q.points) || 0;
-      detail.push({ pregunta: q.label, respuesta: humanizeGivenAnswer(q, given), correcta: correct, puntos: correct ? q.points : 0 });
-      // nota: a propósito NO se le muestra al alumno cuál quedó correcta/incorrecta,
-      // solo el puntaje final — el detalle completo queda para el profesor en Resultados.
+      const { correct, puntos } = scoreQuestionAnswer(q, given);
+      score += puntos;
+      detail.push({
+        pregunta: q.label, respuesta: humanizeGivenAnswer(q, given),
+        correcta: correct, puntos, cambiosPantalla: tabSwitchesByQuestion[q.id] || 0,
+      });
     });
+    score = Math.round(score * 100) / 100;
+    const tabSwitchesTotal = tabSwitchesGeneral + Object.values(tabSwitchesByQuestion).reduce((a, v) => a + v, 0);
 
     fetch(takeApiUrl, {
       method: "POST",
@@ -422,11 +471,11 @@ function renderTake(identity) {
         action: "submit", formId: form.id, formTitle: form.title,
         comision: identity.comision, carrera: identity.carrera || "", numeroAlumno: identity.numeroAlumno,
         nombre: identity.nombre, mail: identity.mail || "", extra: identity.extra || {},
-        score, totalPoints, tabSwitches, detail,
+        score, totalPoints, tabSwitches: tabSwitchesTotal, detail,
       }),
     }).then((r) => r.json()).catch((e) => ({ ok: false, error: "No se pudo conectar con la planilla. Probá de nuevo si tenés conexión." }))
       .then((data) => {
-        submitBtn.remove();
+        takeRoot.innerHTML = "";
         const panel = document.createElement("div");
         if (data && data.ok) {
           localStorage.setItem(SUBMITTED_KEY_PREFIX + form.id, JSON.stringify({
