@@ -358,7 +358,14 @@ input[type=checkbox]:focus-visible, input[type=radio]:focus-visible{
 .opt-row:hover{ background: var(--bg); }
 .opt-row input[type=text]{ flex:1 1 140px; min-width: 100px; }
 .opt-row .radio-correct{ accent-color: var(--good); flex: 0 0 auto; }
-.opt-row input[type=number]{ flex: 0 0 56px; min-width: 56px; }
+.opt-row input[type=number]{
+  flex: 0 0 50px; min-width: 50px; width: 50px; padding: 6px 4px; text-align:center;
+  -moz-appearance: textfield;
+}
+.opt-row input[type=number]::-webkit-outer-spin-button,
+.opt-row input[type=number]::-webkit-inner-spin-button{
+  -webkit-appearance: none; margin: 0;
+}
 
 .checkrow{
   display:flex; align-items:center; gap:10px; font-size:13px; color: var(--ink-soft);
