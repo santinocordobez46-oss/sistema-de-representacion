@@ -80,6 +80,7 @@ function doPost(e) {
     if (data.action === "submit") return jsonOut_(submitResponse_(data));
     if (data.action === "saveform") return jsonOut_(saveForm_(data.form));
     if (data.action === "deleteform") return jsonOut_(deleteForm_(data.formId));
+    if (data.action === "deleteformresponses") return jsonOut_(deleteAllResponsesForForm_(data.formId));
     if (data.action === "deleteresponse") return jsonOut_(deleteResponse_(data.formId, data.numeroAlumno));
     if (data.action === "deletestudent") return jsonOut_(deleteStudent_(data.numeroAlumno));
     if (data.action === "updateresponse") return jsonOut_(updateResponseStudent_(data.formId, data.numeroAlumnoOriginal, data.numeroAlumnoNuevo, data.nombreNuevo));
@@ -141,6 +142,33 @@ function deleteForm_(formId) {
     if (String(rows[i][0]) === String(formId)) { sheet.deleteRow(i + 1); break; }
   }
   return { ok: true };
+}
+
+/* Borra TODAS las respuestas guardadas de un parcialito puntual (todas las
+   comisiones, todos los alumnos). Se usa junto con deleteForm_ cuando el
+   profesor elige explícitamente borrar también las respuestas, no solo la
+   plantilla del parcialito. No se puede deshacer. */
+function deleteAllResponsesForForm_(formId) {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+  } catch (e) {
+    return { ok: false, error: "El sistema está ocupado en este momento, volvé a intentar en unos segundos." };
+  }
+  try {
+    const sheet = getRespuestasSheet_();
+    const rows = sheet.getDataRange().getValues();
+    let deleted = 0;
+    for (let i = rows.length - 1; i >= 1; i--) {
+      if (String(rows[i][0]) === String(formId)) {
+        sheet.deleteRow(i + 1);
+        deleted++;
+      }
+    }
+    return { ok: true, deleted };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 /* ---------------- Respuestas ---------------- */
