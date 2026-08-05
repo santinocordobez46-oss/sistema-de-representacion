@@ -351,13 +351,14 @@ input[type=checkbox]:focus-visible, input[type=radio]:focus-visible{
 .tag-input input:focus{ box-shadow:none; }
 
 .opt-row{
-  display:flex; align-items:center; gap:10px; margin-bottom: 8px;
+  display:flex; flex-wrap: wrap; align-items:center; gap:8px; margin-bottom: 8px;
   padding: 6px 8px; border-radius: var(--radius-sm);
   transition: background .15s ease;
 }
 .opt-row:hover{ background: var(--bg); }
-.opt-row input[type=text]{ flex:1; }
-.opt-row .radio-correct{ accent-color: var(--good); }
+.opt-row input[type=text]{ flex:1 1 140px; min-width: 100px; }
+.opt-row .radio-correct{ accent-color: var(--good); flex: 0 0 auto; }
+.opt-row input[type=number]{ flex: 0 0 56px; min-width: 56px; }
 
 .checkrow{
   display:flex; align-items:center; gap:10px; font-size:13px; color: var(--ink-soft);
