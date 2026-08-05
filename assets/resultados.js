@@ -91,7 +91,7 @@ function renderTable() {
       <td>${escapeHtml(r.carrera || "—")}</td>
       <td>${escapeHtml(r.comision)}</td>
       <td>${escapeHtml(r.mail || "—")}</td>
-      <td><span class="score-pill ${pct >= 0.6 ? "high" : "low"}">${formatNota(r.score, r.totalPoints)}</span></td>
+      <td><span class="score-pill ${pct >= 0.6 ? "high" : "low"}">${formatResolvedNota(r)}</span></td>
       <td>${new Date(r.fecha).toLocaleString("es-AR")}</td>
       <td>${r.tabSwitches || 0}</td>
       <td style="white-space:nowrap;">
@@ -224,7 +224,7 @@ document.getElementById("btn-export-xlsx").addEventListener("click", (ev) => {
       aoa.push([
         r.numeroAlumno, r.nombre, r.carrera || "", r.comision, r.mail || "",
         ...answerCells,
-        r.score, r.totalPoints, scoreToNota(r.score, r.totalPoints), new Date(r.fecha).toLocaleString("es-AR"), r.tabSwitches || 0,
+        r.score, r.totalPoints, resolveNota(r), new Date(r.fecha).toLocaleString("es-AR"), r.tabSwitches || 0,
       ]);
     });
 
