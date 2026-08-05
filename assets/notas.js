@@ -68,7 +68,7 @@ function renderTable() {
       if (!p) return `<td style="color:var(--muted);">—</td>`;
       sumScore += Number(p.score) || 0; sumMax += Number(p.totalPoints) || 0;
       const pct = p.totalPoints > 0 ? p.score / p.totalPoints : 0;
-      return `<td><span class="score-pill ${pct >= 0.6 ? "high" : "low"}">${formatNota(p.score, p.totalPoints)}</span></td>`;
+      return `<td><span class="score-pill ${pct >= 0.6 ? "high" : "low"}">${formatResolvedNota(p)}</span></td>`;
     }).join("");
     const tr = document.createElement("tr");
     tr.innerHTML = `
@@ -112,7 +112,7 @@ document.getElementById("btn-export-xlsx").addEventListener("click", () => {
     let sumScore = 0, sumMax = 0;
     forms.forEach((f) => {
       const p = s.parciales[f.id];
-      row[f.title] = p ? scoreToNota(p.score, p.totalPoints) : "—";
+      row[f.title] = p ? resolveNota(p) : "—";
       if (p) { sumScore += Number(p.score) || 0; sumMax += Number(p.totalPoints) || 0; }
     });
     row["Nota Total"] = scoreToNota(sumScore, sumMax);
