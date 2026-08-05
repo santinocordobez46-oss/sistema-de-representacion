@@ -30,6 +30,7 @@ async function apiListForms() { return apiGet("listforms"); }
 async function apiGetForm(id) { return apiGet("getform", { formId: id }); }
 async function apiSaveForm(form) { return apiPost({ action: "saveform", form }); }
 async function apiDeleteForm(id) { return apiPost({ action: "deleteform", formId: id }); }
+async function apiDeleteAllResponsesForForm(formId) { return apiPost({ action: "deleteformresponses", formId }); }
 async function apiCheck(formId, numeroAlumno, comision) { return apiGet("check", { formId, numeroAlumno, comision }); }
 async function apiSubmit(payload) { return apiPost({ action: "submit", ...payload }); }
 async function apiResults(formId, comision) { return apiGet("results", comision ? { formId, comision } : { formId }); }
