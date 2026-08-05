@@ -82,7 +82,7 @@ async function boot() {
       identityRoot.innerHTML = "";
       const panel = document.createElement("div");
       panel.className = "score-panel";
-      panel.innerHTML = `<span>Ya enviaste tu respuesta</span><span class="num">${formatNota(info.score, info.totalPoints)}</span>`;
+      panel.innerHTML = `<span>Ya enviaste tu respuesta</span><span class="num">${info.nota != null ? formatNotaValue(info.nota) : formatNota(info.score, info.totalPoints)}</span>`;
       identityRoot.appendChild(panel);
       return;
     } catch (e) { /* si el dato local está corrupto, seguimos como si no hubiera nada */ }
@@ -462,6 +462,7 @@ function renderTake(identity) {
       });
     });
     score = Math.round(score * 100) / 100;
+    const nota = scoreToNotaCurva(score, totalPoints);
     const tabSwitchesTotal = tabSwitchesGeneral + Object.values(tabSwitchesByQuestion).reduce((a, v) => a + v, 0);
 
     fetch(takeApiUrl, {
@@ -471,7 +472,7 @@ function renderTake(identity) {
         action: "submit", formId: form.id, formTitle: form.title,
         comision: identity.comision, carrera: identity.carrera || "", numeroAlumno: identity.numeroAlumno,
         nombre: identity.nombre, mail: identity.mail || "", extra: identity.extra || {},
-        score, totalPoints, tabSwitches: tabSwitchesTotal, detail,
+        score, totalPoints, tabSwitches: tabSwitchesTotal, detail, nota,
       }),
     }).then((r) => r.json()).catch((e) => ({ ok: false, error: "No se pudo conectar con la planilla. Probá de nuevo si tenés conexión." }))
       .then((data) => {
@@ -479,10 +480,10 @@ function renderTake(identity) {
         const panel = document.createElement("div");
         if (data && data.ok) {
           localStorage.setItem(SUBMITTED_KEY_PREFIX + form.id, JSON.stringify({
-            numeroAlumno: identity.numeroAlumno, comision: identity.comision, score, totalPoints, ts: Date.now(),
+            numeroAlumno: identity.numeroAlumno, comision: identity.comision, score, totalPoints, nota, ts: Date.now(),
           }));
           panel.className = "score-panel";
-          panel.innerHTML = `<span>${auto ? "Tiempo agotado — envío automático" : "Nota obtenida"}</span><span class="num">${formatNota(score, totalPoints)}</span>`;
+          panel.innerHTML = `<span>${auto ? "Tiempo agotado — envío automático" : "Nota obtenida"}</span><span class="num">${formatNotaValue(nota)}</span>`;
           takeRoot.appendChild(panel);
           const note = document.createElement("p");
           note.className = "hint"; note.style.cssText = "font-size:12px;color:var(--muted);margin-top:10px;";
