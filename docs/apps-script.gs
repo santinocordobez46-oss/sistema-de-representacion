@@ -269,7 +269,7 @@ function submitResponse_(data) {
     sheet.appendRow([
       data.formId, data.formTitle, data.comision, data.numeroAlumno, data.nombre,
       data.score, data.totalPoints, new Date(), data.tabSwitches || 0, JSON.stringify(data.detail || []),
-      data.carrera || "", data.mail || "", JSON.stringify(data.extra || {}),
+      data.carrera || "", data.mail || "", JSON.stringify(data.extra || {}), data.nota != null ? data.nota : "",
     ]);
     return { ok: true };
   } finally {
@@ -339,6 +339,7 @@ function getResults_(formId, comision) {
       comision: r[2], numeroAlumno: r[3], nombre: r[4],
       score: r[5], totalPoints: r[6], fecha: r[7], tabSwitches: r[8], detail: safeParse_(r[9]),
       carrera: r[10] || "", mail: r[11] || "", extra: safeParse_(r[12] || "{}"),
+      nota: (r[13] !== undefined && r[13] !== "" && r[13] !== null) ? r[13] : null,
     });
   }
   sortByNumero_(out);
@@ -371,7 +372,10 @@ function getNotas_(comision) {
       students[key].comision = com || students[key].comision;
       students[key].carrera = r[10] || students[key].carrera;
     }
-    students[key].parciales[r[0]] = { formTitle: r[1], score: r[5], totalPoints: r[6] };
+    students[key].parciales[r[0]] = {
+      formTitle: r[1], score: r[5], totalPoints: r[6],
+      nota: (r[13] !== undefined && r[13] !== "" && r[13] !== null) ? r[13] : null,
+    };
   }
 
   const list = Object.values(students);
