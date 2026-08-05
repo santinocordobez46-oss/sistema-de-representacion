@@ -237,10 +237,10 @@ function makeBlankQuestion(type) {
   const base = { id: uid("q"), type, points: 1, required: true, label: "" };
   if (type === "short_text") return { ...base, acceptedAnswers: [], caseInsensitive: true };
   if (type === "number") return { ...base, acceptedAnswers: [] };
-  if (type === "multiple_choice") return { ...base, options: [{ id: uid("o"), text: "" }, { id: uid("o"), text: "" }], multiSelect: false, correctOptionId: null, correctOptionIds: [], requiredSelectionCount: null };
+  if (type === "multiple_choice") return { ...base, options: [{ id: uid("o"), text: "" }, { id: uid("o"), text: "" }], multiSelect: false, correctOptionId: null, correctOptionIds: [], optionPoints: {}, requiredSelectionCount: null };
   if (type === "true_false") {
     const vOpt = { id: uid("o"), text: "Verdadero" }, fOpt = { id: uid("o"), text: "Falso" };
-    return { ...base, type: "multiple_choice", options: [vOpt, fOpt], multiSelect: false, correctOptionId: null, correctOptionIds: [], requiredSelectionCount: null };
+    return { ...base, type: "multiple_choice", options: [vOpt, fOpt], multiSelect: false, correctOptionId: null, correctOptionIds: [], optionPoints: {}, requiredSelectionCount: null };
   }
   return base;
 }
@@ -289,6 +289,8 @@ function renderQuestionBlock(section, q, qIdx) {
   stamp.className = "points-stamp"; stamp.innerHTML = `<span>PTS</span>`;
   const ptsInput = document.createElement("input");
   ptsInput.type = "number"; ptsInput.min = "0"; ptsInput.step = "0.5"; ptsInput.value = q.points;
+  ptsInput.disabled = q.type === "multiple_choice" && !!q.multiSelect;
+  ptsInput.title = ptsInput.disabled ? "Se calcula solo, sumando el puntaje de cada opción correcta" : "";
   ptsInput.addEventListener("input", () => { q.points = Number(ptsInput.value) || 0; persist(); });
   stamp.appendChild(ptsInput);
   head.appendChild(stamp);
@@ -376,12 +378,24 @@ function renderQuestionBlock(section, q, qIdx) {
   }
 
   if (q.type === "multiple_choice") {
+    const recomputeMultiPoints = () => {
+      const sum = Object.values(q.optionPoints || {}).reduce((a, v) => a + (Number(v) || 0), 0);
+      q.points = Math.round(sum * 100) / 100;
+      ptsInput.value = q.points;
+    };
+
     const multiChk = document.createElement("div"); multiChk.className = "checkrow";
     const multiCb = document.createElement("input"); multiCb.type = "checkbox"; multiCb.checked = !!q.multiSelect;
     multiCb.addEventListener("change", () => {
       q.multiSelect = multiCb.checked;
-      if (q.multiSelect) { q.correctOptionIds = q.correctOptionId ? [q.correctOptionId] : []; }
-      else { q.correctOptionId = (q.correctOptionIds || [])[0] || null; }
+      if (q.multiSelect) {
+        q.correctOptionIds = q.correctOptionId ? [q.correctOptionId] : [];
+        q.optionPoints = q.optionPoints || {};
+        if (q.correctOptionId && !(q.correctOptionId in q.optionPoints)) q.optionPoints[q.correctOptionId] = q.points || 1;
+      } else {
+        q.correctOptionId = (q.correctOptionIds || [])[0] || null;
+        q.optionPoints = {};
+      }
       persist(); renderBuilder();
     });
     multiChk.appendChild(multiCb);
@@ -389,6 +403,11 @@ function renderQuestionBlock(section, q, qIdx) {
     body.appendChild(multiChk);
 
     if (q.multiSelect) {
+      const hint = document.createElement("div");
+      hint.className = "empty-note"; hint.style.cssText = "padding:8px 10px;font-size:12px;margin-bottom:8px;";
+      hint.textContent = "La nota de esta pregunta es proporcional: si el alumno marca solo algunas de las correctas, suma el puntaje de esas nomás (no todo o nada). Cada opción correcta puede valer distinto — el total de arriba se calcula solo.";
+      body.appendChild(hint);
+
       const cntField = document.createElement("div");
       cntField.innerHTML = `<label class="field-label">Cantidad exacta que el alumno debe marcar (opcional)</label>`;
       const cntInp = document.createElement("input");
@@ -407,25 +426,51 @@ function renderQuestionBlock(section, q, qIdx) {
       check.type = q.multiSelect ? "checkbox" : "radio";
       check.className = "radio-correct";
       if (!q.multiSelect) check.name = "correct_" + q.id;
+      const isCorrectAlready = q.multiSelect && (q.correctOptionIds || []).includes(opt.id);
+      const evenSplitDefault = (q.correctOptionIds || []).length > 0 ? Math.round((Number(q.points) / q.correctOptionIds.length) * 100) / 100 : 1;
+      const optPtsInp = document.createElement("input");
+      optPtsInp.type = "number"; optPtsInp.min = "0"; optPtsInp.step = "0.5";
+      optPtsInp.placeholder = "pts"; optPtsInp.style.cssText = "width:56px;flex:none;";
+      optPtsInp.value = (q.optionPoints || {})[opt.id] ?? (isCorrectAlready ? evenSplitDefault : "");
+      optPtsInp.style.display = isCorrectAlready ? "" : "none";
+      optPtsInp.addEventListener("input", () => {
+        q.optionPoints = q.optionPoints || {};
+        q.optionPoints[opt.id] = Number(optPtsInp.value) || 0;
+        recomputeMultiPoints(); persist();
+      });
       if (q.multiSelect) {
         check.checked = (q.correctOptionIds || []).includes(opt.id);
+        optPtsInp.style.display = check.checked ? "" : "none";
         check.addEventListener("change", () => {
           q.correctOptionIds = q.correctOptionIds || [];
-          if (check.checked) q.correctOptionIds.push(opt.id);
-          else q.correctOptionIds = q.correctOptionIds.filter((id) => id !== opt.id);
-          persist();
+          q.optionPoints = q.optionPoints || {};
+          if (check.checked) {
+            q.correctOptionIds.push(opt.id);
+            if (!(opt.id in q.optionPoints)) q.optionPoints[opt.id] = 1;
+            optPtsInp.value = q.optionPoints[opt.id];
+            optPtsInp.style.display = "";
+          } else {
+            q.correctOptionIds = q.correctOptionIds.filter((id) => id !== opt.id);
+            delete q.optionPoints[opt.id];
+            optPtsInp.style.display = "none";
+          }
+          recomputeMultiPoints(); persist();
         });
       } else {
         check.checked = q.correctOptionId === opt.id;
         check.addEventListener("change", () => { q.correctOptionId = opt.id; persist(); });
       }
       row.appendChild(check);
+      if (q.multiSelect) row.appendChild(optPtsInp);
       const txt = document.createElement("input");
       txt.type = "text"; txt.value = opt.text; txt.placeholder = "Texto de la opción";
       txt.addEventListener("input", () => { opt.text = txt.value; persist(); });
       row.appendChild(txt);
       const rm = document.createElement("button"); rm.className = "btn btn-small btn-danger"; rm.textContent = "×";
-      rm.addEventListener("click", () => { q.options.splice(oIdx, 1); persist(); renderBuilder(); });
+      rm.addEventListener("click", () => {
+        if (q.optionPoints) delete q.optionPoints[opt.id];
+        q.options.splice(oIdx, 1); recomputeMultiPoints(); persist(); renderBuilder();
+      });
       row.appendChild(rm);
       optField.appendChild(row);
     });
@@ -587,6 +632,7 @@ function renderTake() {
       card.appendChild(lbl);
       const pts = document.createElement("div");
       pts.className = "take-question__points"; pts.textContent = `Valor: ${q.points} punto(s)`;
+      if (q.multiSelect && q.requiredSelectionCount) pts.textContent += ` — marcá exactamente ${q.requiredSelectionCount} opción(es)`;
       card.appendChild(pts);
       if (q.image) { const img = document.createElement("img"); img.className = "q-img"; img.src = q.image; card.appendChild(img); }
 
@@ -597,12 +643,20 @@ function renderTake() {
         card.appendChild(inp);
       } else if (q.multiSelect) {
         answers[q.id] = [];
+        const limitMsg = document.createElement("div");
+        limitMsg.style.cssText = "font-size:12px;color:var(--accent-strong);margin-top:4px;display:none;";
         q.options.forEach((opt) => {
           const row = document.createElement("label"); row.className = "choice-row";
           const check = document.createElement("input");
           check.type = "checkbox"; check.value = opt.id;
           check.addEventListener("change", () => {
-            answers[q.id] = answers[q.id] || [];
+            if (check.checked && q.requiredSelectionCount && answers[q.id].length >= q.requiredSelectionCount) {
+              check.checked = false;
+              limitMsg.textContent = `Ya marcaste el máximo de ${q.requiredSelectionCount} opción(es) — destildá una para elegir otra.`;
+              limitMsg.style.display = "block";
+              return;
+            }
+            limitMsg.style.display = "none";
             if (check.checked) answers[q.id].push(opt.id);
             else answers[q.id] = answers[q.id].filter((id) => id !== opt.id);
           });
@@ -611,6 +665,7 @@ function renderTake() {
           row.appendChild(span);
           card.appendChild(row);
         });
+        card.appendChild(limitMsg);
       } else {
         q.options.forEach((opt) => {
           const row = document.createElement("label"); row.className = "choice-row";
@@ -634,26 +689,19 @@ function renderTake() {
     let score = 0;
     allQuestions.forEach((q) => {
       const given = answers[q.id];
-      let correct = false;
-      if (q.type === "short_text") correct = (q.acceptedAnswers || []).some((a) => normalizeText(a) === normalizeText(given));
-      else if (q.type === "number") { const g = normalizeNumber(given); correct = g !== null && (q.acceptedAnswers || []).some((a) => normalizeNumber(a) === g); }
-      else if (q.multiSelect) {
-        const givenIds = (given || []).slice().sort();
-        const correctIds = (q.correctOptionIds || []).slice().sort();
-        correct = givenIds.length === correctIds.length && givenIds.every((id, i) => id === correctIds[i]);
-      }
-      else if (q.type === "multiple_choice") correct = given === q.correctOptionId;
-      if (correct) score += Number(q.points) || 0;
+      const { correct, puntos } = scoreQuestionAnswer(q, given);
+      score += puntos;
       const card = takeRoot.querySelector(`[data-qid="${q.id}"]`);
       const old = card.querySelector(".result-badge"); if (old) old.remove();
       const badge = document.createElement("span");
+      const parcial = q.multiSelect && !correct && puntos > 0;
       badge.className = "result-badge " + (correct ? "ok" : "bad");
-      badge.textContent = correct ? "✓ Correcta" : "✗ Incorrecta";
+      badge.textContent = correct ? `✓ Correcta (${puntos} pts)` : (parcial ? `△ Parcial (${puntos}/${q.points} pts)` : `✗ Incorrecta (0/${q.points} pts)`);
       card.querySelector(".take-question__label").appendChild(badge);
     });
     let panel = document.querySelector(".score-panel");
     if (!panel) { panel = document.createElement("div"); panel.className = "score-panel"; takeRoot.appendChild(panel); }
-    panel.innerHTML = `<span>Puntaje obtenido</span><span class="num">${score} / ${totalPoints}</span>`;
+    panel.innerHTML = `<span>Puntaje obtenido</span><span class="num">${Math.round(score * 100) / 100} / ${totalPoints}</span>`;
   });
   takeRoot.appendChild(submitBtn);
 }
