@@ -156,8 +156,24 @@ async function loadDashboard() {
     });
     card.querySelector('[data-act="delete"]').addEventListener("click", async (e) => {
       e.stopPropagation();
-      if (confirm(`¿Borrar "${form.title}"? Esto no borra las respuestas ya guardadas, solo el formulario.`)) {
-        await apiDeleteForm(form.id); loadDashboard();
+      if (!confirm(`¿Borrar "${form.title}"?`)) return;
+      const btn = e.currentTarget;
+      const borrarRespuestas = confirm(
+        `¿También querés borrar TODAS las respuestas ya guardadas de "${form.title}"?\n\n` +
+        `Aceptar = se borra el formulario Y todas sus respuestas (no se puede deshacer).\n` +
+        `Cancelar = se borra solo el formulario, las respuestas quedan guardadas igual.`
+      );
+      btn.disabled = true; btn.textContent = "Borrando…";
+      try {
+        if (borrarRespuestas) {
+          const res = await apiDeleteAllResponsesForForm(form.id);
+          if (!res.ok) throw new Error(res.error || "No se pudieron borrar las respuestas.");
+        }
+        await apiDeleteForm(form.id);
+        loadDashboard();
+      } catch (err) {
+        alert(`Ocurrió un problema: ${err.message || err}. Revisá que la implementación de Apps Script esté actualizada (Implementar → Nueva versión) y volvé a intentar.`);
+        btn.disabled = false; btn.textContent = "Borrar";
       }
     });
     card.addEventListener("click", () => { location.href = "editor.html?id=" + form.id; });
