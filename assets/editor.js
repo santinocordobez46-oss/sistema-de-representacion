@@ -430,7 +430,7 @@ function renderQuestionBlock(section, q, qIdx) {
       const evenSplitDefault = (q.correctOptionIds || []).length > 0 ? Math.round((Number(q.points) / q.correctOptionIds.length) * 100) / 100 : 1;
       const optPtsInp = document.createElement("input");
       optPtsInp.type = "number"; optPtsInp.min = "0"; optPtsInp.step = "0.5";
-      optPtsInp.placeholder = "pts"; optPtsInp.style.cssText = "width:56px;flex:none;";
+      optPtsInp.placeholder = "pts";
       optPtsInp.value = (q.optionPoints || {})[opt.id] ?? (isCorrectAlready ? evenSplitDefault : "");
       optPtsInp.style.display = isCorrectAlready ? "" : "none";
       optPtsInp.addEventListener("input", () => {
