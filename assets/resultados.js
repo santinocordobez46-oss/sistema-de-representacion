@@ -109,12 +109,13 @@ function renderTable() {
     if (r.detail && r.detail.length > 0) {
       const detailTable = document.createElement("table");
       detailTable.style.cssText = "width:100%; font-size:12px;";
-      detailTable.innerHTML = `<tr><th style="text-align:left;padding:4px 8px;">Pregunta</th><th style="text-align:left;padding:4px 8px;">Respuesta</th><th style="text-align:left;padding:4px 8px;">¿Correcta?</th><th style="text-align:left;padding:4px 8px;">Puntos</th></tr>` +
+      detailTable.innerHTML = `<tr><th style="text-align:left;padding:4px 8px;">Pregunta</th><th style="text-align:left;padding:4px 8px;">Respuesta</th><th style="text-align:left;padding:4px 8px;">¿Correcta?</th><th style="text-align:left;padding:4px 8px;">Puntos</th><th style="text-align:left;padding:4px 8px;">Salió de pantalla</th></tr>` +
         r.detail.map((d, dIdx) => `<tr>
           <td style="padding:4px 8px;">${formatRichText(escapeHtml(d.pregunta || ""))}</td>
           <td style="padding:4px 8px;">${escapeHtml(humanizeAnswer(formQuestions[dIdx], d.respuesta))}</td>
           <td style="padding:4px 8px;">${d.correcta ? "✓" : "✗"}</td>
           <td style="padding:4px 8px;">${d.puntos}</td>
+          <td style="padding:4px 8px; ${d.cambiosPantalla ? "color:var(--accent-strong);font-weight:600;" : ""}">${d.cambiosPantalla ? `${d.cambiosPantalla}x` : "—"}</td>
         </tr>`).join("");
       detailTd.appendChild(detailTable);
     } else {
@@ -217,7 +218,8 @@ document.getElementById("btn-export-xlsx").addEventListener("click", (ev) => {
       const answerCells = questions.map((q, i) => {
         const d = (r.detail || [])[i];
         if (!d) return "";
-        return `${humanizeAnswer(q, d.respuesta)} ${d.correcta ? "✓" : "✗"}`;
+        const salida = d.cambiosPantalla ? ` [salió ${d.cambiosPantalla}x]` : "";
+        return `${humanizeAnswer(q, d.respuesta)} ${d.correcta ? "✓" : "✗"}${salida}`;
       });
       aoa.push([
         r.numeroAlumno, r.nombre, r.carrera || "", r.comision, r.mail || "",
