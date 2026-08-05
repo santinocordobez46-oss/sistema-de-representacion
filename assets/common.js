@@ -51,6 +51,50 @@ function normalizeNumber(s) {
   return Number.isNaN(n) ? null : n;
 }
 
+/* ---------- corrección de una pregunta (compartida entre la vista previa del editor y el examen real) ----------
+   Devuelve { correct, puntos }. Para opción múltiple con varias correctas,
+   el puntaje es PROPORCIONAL: si cada opción correcta tiene su propio valor
+   cargado (q.optionPoints), se suma solo el de las que el alumno marcó bien
+   (nunca resta por marcar una incorrecta, nunca supera el puntaje total). Si
+   no hay valores individuales cargados (preguntas viejas), se reparte el
+   puntaje total en partes iguales entre las opciones correctas, así ninguna
+   pregunta de "marcar varias" queda en todo-o-nada por defecto. */
+function scoreQuestionAnswer(q, given) {
+  if (q.type === "short_text") {
+    const correct = (q.acceptedAnswers || []).some((a) => normalizeText(a) === normalizeText(given));
+    return { correct, puntos: correct ? (Number(q.points) || 0) : 0 };
+  }
+  if (q.type === "number") {
+    const g = normalizeNumber(given);
+    const correct = g !== null && (q.acceptedAnswers || []).some((a) => normalizeNumber(a) === g);
+    return { correct, puntos: correct ? (Number(q.points) || 0) : 0 };
+  }
+  if (q.multiSelect) {
+    const givenIds = Array.isArray(given) ? given : [];
+    const correctIds = q.correctOptionIds || [];
+    const totalPoints = Number(q.points) || 0;
+    let pointsMap = q.optionPoints || {};
+    if (!pointsMap || Object.keys(pointsMap).length === 0) {
+      const n = correctIds.length || 1;
+      pointsMap = {};
+      correctIds.forEach((id) => { pointsMap[id] = totalPoints / n; });
+    }
+    let puntos = 0;
+    givenIds.forEach((id) => {
+      if (correctIds.includes(id) && pointsMap[id] != null) puntos += Number(pointsMap[id]) || 0;
+    });
+    puntos = Math.max(0, Math.min(puntos, totalPoints));
+    puntos = Math.round(puntos * 100) / 100; // evita arrastre de decimales flotantes
+    const correct = givenIds.length === correctIds.length && correctIds.every((id) => givenIds.includes(id));
+    return { correct, puntos };
+  }
+  if (q.type === "multiple_choice") {
+    const correct = given === q.correctOptionId;
+    return { correct, puntos: correct ? (Number(q.points) || 0) : 0 };
+  }
+  return { correct: false, puntos: 0 };
+}
+
 /* ---------- ordenamiento compartido: primero por comisión, después por N° de alumno ---------- */
 function sortByComisionYNumero(list) {
   return list.slice().sort((a, b) => {
