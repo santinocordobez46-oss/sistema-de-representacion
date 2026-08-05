@@ -256,17 +256,59 @@ function escapeHtml(str) {
    Sintaxis simple tipo markdown: **negrita**, *cursiva/inclinada*, __subrayado__.
    Siempre se aplica DESPUÉS de escapeHtml(), nunca antes, para que no se pueda
    inyectar HTML real a través del enunciado. */
-/* ---------- nota en escala de 1 a 10 (proporcional al puntaje máximo) ----------
-   Sirve tanto para un parcialito de 10 puntos como uno de 20, 35, etc. —
-   siempre se saca la regla de tres y se redondea a 1 decimal. */
+/* ---------- nota en escala de 1 a 10 — fórmula VIEJA (lineal, proporcional) ----------
+   Se deja intacta para siempre: es la que usan las respuestas guardadas
+   ANTES de la curva nueva, así nunca les cambia la nota ya mostrada. */
 function scoreToNota(score, totalPoints) {
   const total = Number(totalPoints) || 0;
   if (total <= 0) return 0;
   const raw = (Number(score) / total) * 10;
   return Math.round(raw * 10) / 10;
 }
+
+/* ---------- nota en escala de 1 a 10 — fórmula NUEVA (con curva) ----------
+   60% del puntaje total = nota 4. De ahí para abajo es lineal (0% = nota 0).
+   De ahí para arriba (60%-100%) es una curva logarítmica hasta nota 10: sube
+   rápido apenas se pasa el 60%, y después cuesta cada vez más acercarse al 10.
+   Se usa SOLO para respuestas nuevas, calculada y GUARDADA en el momento
+   exacto del envío — así queda fija para siempre, pase lo que pase después
+   con la fórmula. */
+function scoreToNotaCurva(score, totalPoints) {
+  const total = Number(totalPoints) || 0;
+  if (total <= 0) return 0;
+  const pct = Math.max(0, Math.min(1, Number(score) / total));
+  let nota;
+  if (pct <= 0.6) {
+    nota = (pct / 0.6) * 4;
+  } else {
+    const x = (pct - 0.6) / 0.4; // 0..1 dentro del tramo 60%-100%
+    const k = 9;
+    nota = 4 + 6 * (Math.log(1 + k * x) / Math.log(1 + k));
+  }
+  return Math.round(nota * 10) / 10;
+}
+
+function formatNotaValue(nota) {
+  return Number(nota).toFixed(1).replace(/\.0$/, "").replace(".", ",");
+}
 function formatNota(score, totalPoints) {
-  return scoreToNota(score, totalPoints).toFixed(1).replace(/\.0$/, "").replace(".", ",");
+  return formatNotaValue(scoreToNota(score, totalPoints));
+}
+function formatNotaCurva(score, totalPoints) {
+  return formatNotaValue(scoreToNotaCurva(score, totalPoints));
+}
+
+/* Decide qué nota mostrar para una fila/parcial ya guardado: si tiene una
+   nota guardada (respuestas nuevas, con la curva), se usa esa tal cual quedó
+   fijada en su momento. Si no la tiene (respuestas de antes de este cambio),
+   se calcula con la fórmula vieja lineal — para que no se modifique nada de
+   lo que ya existe. */
+function resolveNota(row) {
+  if (row && row.nota !== null && row.nota !== undefined && row.nota !== "") return Number(row.nota);
+  return scoreToNota(row ? row.score : 0, row ? row.totalPoints : 0);
+}
+function formatResolvedNota(row) {
+  return formatNotaValue(resolveNota(row));
 }
 
 function formatRichText(escapedText) {
