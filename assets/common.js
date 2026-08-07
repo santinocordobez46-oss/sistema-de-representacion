@@ -366,11 +366,43 @@ function tabSwitchInfo(n) {
 function faltasInfo(faltas, totalForms) {
   const total = Number(totalForms) || 0;
   const count = Number(faltas) || 0;
-  if (total <= 0 || count <= 0) return { label: "Sin faltas", className: "faltas-pill level-0" };
+  if (total <= 0 || count <= 0) return { level: 0, label: "Sin faltas", className: "faltas-pill level-0" };
   const pct = count / total;
-  if (pct <= 0.25) return { label: "Leve", className: "faltas-pill level-1" };
-  if (pct <= 0.5) return { label: "Moderado", className: "faltas-pill level-2" };
-  return { label: "Grave", className: "faltas-pill level-3" };
+  if (pct <= 0.25) return { level: 1, label: "Leve", className: "faltas-pill level-1" };
+  if (pct <= 0.5) return { level: 2, label: "Moderado", className: "faltas-pill level-2" };
+  return { level: 3, label: "Grave", className: "faltas-pill level-3" };
+}
+
+/* ---------- mismos colores, pero para el Excel exportado ----------
+   Requiere la librería xlsx-js-style (no la xlsx común, que no puede escribir
+   colores de fondo). Repite EXACTAMENTE la misma paleta que la app: verde/rojo
+   para notas, azules para cambios de pantalla, violetas para faltas — así el
+   Excel se ve igual que la pantalla. */
+function xlsxNotaStyle(aprobado) {
+  return aprobado
+    ? { fill: { fgColor: { rgb: "DCF5EA" } }, font: { color: { rgb: "0F8A5F" }, bold: true } }
+    : { fill: { fgColor: { rgb: "FFE3D9" } }, font: { color: { rgb: "D8431F" }, bold: true } };
+}
+function xlsxTabSwitchStyle(n) {
+  const level = tabSwitchInfo(n).level;
+  if (level === 0) return {};
+  if (level === 1) return { fill: { fgColor: { rgb: "CCFBF1" } }, font: { color: { rgb: "115E59" }, bold: true } };
+  if (level === 2) return { fill: { fgColor: { rgb: "0D9488" } }, font: { color: { rgb: "FFFFFF" }, bold: true } };
+  return { fill: { fgColor: { rgb: "115E59" } }, font: { color: { rgb: "FFFFFF" }, bold: true } };
+}
+function xlsxFaltasStyle(faltas, totalForms) {
+  const level = faltasInfo(faltas, totalForms).level;
+  if (level === 0) return {};
+  if (level === 1) return { fill: { fgColor: { rgb: "FCE7F3" } }, font: { color: { rgb: "9D174D" }, bold: true } };
+  if (level === 2) return { fill: { fgColor: { rgb: "DB2777" } }, font: { color: { rgb: "FFFFFF" }, bold: true } };
+  return { fill: { fgColor: { rgb: "9D174D" } }, font: { color: { rgb: "FFFFFF" }, bold: true } };
+}
+function xlsxHeaderStyle() {
+  return { fill: { fgColor: { rgb: "4F46E5" } }, font: { color: { rgb: "FFFFFF" }, bold: true } };
+}
+function xlsxCell(value, opts) {
+  const isNumber = typeof value === "number";
+  return Object.assign({ v: value, t: isNumber ? "n" : "s" }, opts && opts.style ? { s: opts.style } : {});
 }
 
 function formatRichText(escapedText) {
