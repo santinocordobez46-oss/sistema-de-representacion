@@ -37,6 +37,12 @@ function normNum_(v) {
   return s.replace(/^0+(?=\d)/, "");
 }
 
+/* Normaliza texto (nombre o mail) para comparar sin importar mayúsculas,
+   minúsculas ni espacios de más al principio/final. */
+function normText_(v) {
+  return String(v == null ? "" : v).trim().toLowerCase();
+}
+
 function getRespuestasSheet_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sheet = ss.getSheetByName(SHEET_RESPUESTAS);
@@ -45,7 +51,8 @@ function getRespuestasSheet_() {
     sheet.appendRow([
       "FormID", "Formulario", "Comisión", "N° Alumno", "Nombre",
       "Puntaje", "Puntaje Máximo", "Fecha/Hora", "Cambios de pantalla detectados",
-      "Detalle (pregunta -> respuesta -> correcta)", "Carrera", "Mail", "Campos extra (JSON)"
+      "Detalle (pregunta -> respuesta -> correcta)", "Carrera", "Mail", "Campos extra (JSON)",
+      "Nota (1-10)", "Color manual (vacío=automático, verde, rojo)"
     ]);
     sheet.setFrozenRows(1);
   }
@@ -70,7 +77,7 @@ function doGet(e) {
   if (action === "notas") return jsonOut_(getNotas_(e.parameter.comision));
   if (action === "listforms") return jsonOut_(listForms_());
   if (action === "getform") return jsonOut_(getFormById_(e.parameter.formId));
-  if (action === "lookupstudent") return jsonOut_(lookupStudent_(e.parameter.numeroAlumno));
+  if (action === "lookupstudent") return jsonOut_(lookupStudent_(e.parameter.numeroAlumno, e.parameter.nombre, e.parameter.mail));
   return jsonOut_({ ok: false, error: "Acción no reconocida" });
 }
 
@@ -84,6 +91,8 @@ function doPost(e) {
     if (data.action === "deleteresponse") return jsonOut_(deleteResponse_(data.formId, data.numeroAlumno));
     if (data.action === "deletestudent") return jsonOut_(deleteStudent_(data.numeroAlumno));
     if (data.action === "updateresponse") return jsonOut_(updateResponseStudent_(data.formId, data.numeroAlumnoOriginal, data.numeroAlumnoNuevo, data.nombreNuevo));
+    if (data.action === "setresponsecolor") return jsonOut_(setResponseColor_(data.formId, data.numeroAlumno, data.color));
+    if (data.action === "updatestudentinfo") return jsonOut_(updateStudentInfo_(data.numeroAlumnoOriginal, data.numeroAlumnoNuevo, data.nombreNuevo, data.mailNuevo));
     return jsonOut_({ ok: false, error: "Acción no reconocida" });
   } catch (err) {
     return jsonOut_({ ok: false, error: String(err) });
@@ -185,22 +194,40 @@ function checkSubmitted_(formId, numeroAlumno) {
   return { ok: true, submitted: false };
 }
 
-/* Busca si ese N° de alumno ya respondió ALGÚN parcialito antes (en cualquier
-   comisión) y devuelve sus datos (nombre, carrera, mail) para autocompletar.
-   Se queda con la fila más reciente si respondió más de un parcialito. */
-function lookupStudent_(numeroAlumno) {
-  if (!numeroAlumno) return { ok: true, found: false };
+/* Busca si ese alumno ya respondió ALGÚN parcialito antes (en cualquier
+   comisión) y devuelve sus datos (nombre, N° de alumno, carrera, mail) para
+   autocompletar. Se puede buscar por N° de alumno, por nombre o por mail —
+   se usa el primero de los tres que venga con datos, en ese orden de
+   prioridad. Nombre y mail se comparan sin importar mayúsculas/minúsculas
+   ni espacios de más. Se queda con la fila más reciente si respondió más
+   de un parcialito. */
+function lookupStudent_(numeroAlumno, nombre, mail) {
+  let campo = null; // qué campo se terminó usando para buscar, para el mensaje del frontend
+  if (numeroAlumno) campo = "numero";
+  else if (nombre) campo = "nombre";
+  else if (mail) campo = "mail";
+  if (!campo) return { ok: true, found: false, searchedBy: null };
+
   const sheet = getRespuestasSheet_();
   const rows = sheet.getDataRange().getValues();
+  const numNorm = campo === "numero" ? normNum_(numeroAlumno) : null;
+  const nombreNorm = campo === "nombre" ? normText_(nombre) : null;
+  const mailNorm = campo === "mail" ? normText_(mail) : null;
+
   for (let i = rows.length - 1; i >= 1; i--) {
-    if (normNum_(rows[i][3]) === normNum_(numeroAlumno)) {
+    const matches =
+      (campo === "numero" && normNum_(rows[i][3]) === numNorm) ||
+      (campo === "nombre" && normText_(rows[i][4]) === nombreNorm) ||
+      (campo === "mail" && normText_(rows[i][11]) === mailNorm);
+    if (matches) {
       return {
-        ok: true, found: true,
-        nombre: rows[i][4] || "", carrera: rows[i][10] || "", mail: rows[i][11] || "",
+        ok: true, found: true, searchedBy: campo,
+        numeroAlumno: rows[i][3] || "", nombre: rows[i][4] || "",
+        carrera: rows[i][10] || "", mail: rows[i][11] || "",
       };
     }
   }
-  return { ok: true, found: false };
+  return { ok: true, found: false, searchedBy: campo };
 }
 
 /* Corrige el N° de alumno (y opcionalmente el nombre) de una respuesta ya
@@ -239,6 +266,82 @@ function updateResponseStudent_(formId, numeroAlumnoOriginal, numeroAlumnoNuevo,
     sheet.getRange(targetRow + 1, 4).setValue(numeroAlumnoNuevo); // columna D: N° Alumno
     if (nombreNuevo) sheet.getRange(targetRow + 1, 5).setValue(nombreNuevo); // columna E: Nombre
     return { ok: true };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/* Fuerza (o quita) el color de una nota puntual, independientemente de si el
+   alumno llegó o no al 60% del puntaje — para cuando el profesor quiere
+   marcarla aprobada/desaprobada "a mano" (por un recuperatorio, una
+   corrección manual, etc). color: "verde" | "rojo" | "" (vuelve a automático,
+   según puntaje). Se guarda en la fila de ESE parcial puntual. */
+function setResponseColor_(formId, numeroAlumno, color) {
+  if (["", "verde", "rojo"].indexOf(color) === -1) {
+    return { ok: false, error: 'El color tiene que ser "verde", "rojo" o vacío (automático).' };
+  }
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+  } catch (e) {
+    return { ok: false, error: "El sistema está ocupado en este momento, volvé a intentar en unos segundos." };
+  }
+  try {
+    const sheet = getRespuestasSheet_();
+    const rows = sheet.getDataRange().getValues();
+    for (let i = 1; i < rows.length; i++) {
+      if (String(rows[i][0]) === String(formId) && normNum_(rows[i][3]) === normNum_(numeroAlumno)) {
+        sheet.getRange(i + 1, 15).setValue(color); // columna O: Color manual
+        return { ok: true };
+      }
+    }
+    return { ok: false, error: "No se encontró esa respuesta (puede que ya se haya borrado)." };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/* Corrige N° de alumno, nombre y/o mail de un alumno en TODO su historial —
+   todas sus respuestas, en todos los parcialitos, no una puntual (para eso
+   está updateResponseStudent_). Se usa desde el Libro de notas, que es la
+   vista que junta todo ese historial en una sola fila. nombreNuevo y
+   mailNuevo son opcionales: si vienen vacíos, no se tocan. */
+function updateStudentInfo_(numeroAlumnoOriginal, numeroAlumnoNuevo, nombreNuevo, mailNuevo) {
+  if (!numeroAlumnoNuevo) return { ok: false, error: "El N° de alumno no puede quedar vacío." };
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+  } catch (e) {
+    return { ok: false, error: "El sistema está ocupado en este momento, volvé a intentar en unos segundos." };
+  }
+  try {
+    const sheet = getRespuestasSheet_();
+    const rows = sheet.getDataRange().getValues();
+    const targetRows = [];
+    for (let i = 1; i < rows.length; i++) {
+      if (normNum_(rows[i][3]) === normNum_(numeroAlumnoOriginal)) targetRows.push(i);
+    }
+    if (targetRows.length === 0) return { ok: false, error: "No se encontró ningún alumno con ese N°." };
+
+    const numeroCambia = normNum_(numeroAlumnoNuevo) !== normNum_(numeroAlumnoOriginal);
+    if (numeroCambia) {
+      // el nuevo N° no puede pisar a OTRO alumno que ya tenga respuesta en
+      // alguno de los MISMOS parcialitos que este alumno ya rindió
+      const formIdsDeEste = new Set(targetRows.map((i) => String(rows[i][0])));
+      for (let i = 1; i < rows.length; i++) {
+        if (targetRows.indexOf(i) !== -1) continue;
+        if (formIdsDeEste.has(String(rows[i][0])) && normNum_(rows[i][3]) === normNum_(numeroAlumnoNuevo)) {
+          return { ok: false, error: `Ya existe otro alumno con el N° ${numeroAlumnoNuevo} en "${rows[i][1]}". Borrá esa respuesta antes, o elegí otro número.` };
+        }
+      }
+    }
+
+    targetRows.forEach((i) => {
+      sheet.getRange(i + 1, 4).setValue(numeroAlumnoNuevo); // columna D: N° Alumno
+      if (nombreNuevo) sheet.getRange(i + 1, 5).setValue(nombreNuevo); // columna E: Nombre
+      if (mailNuevo) sheet.getRange(i + 1, 12).setValue(mailNuevo); // columna L: Mail
+    });
+    return { ok: true, updated: targetRows.length };
   } finally {
     lock.releaseLock();
   }
@@ -368,6 +471,7 @@ function getResults_(formId, comision) {
       score: r[5], totalPoints: r[6], fecha: r[7], tabSwitches: r[8], detail: safeParse_(r[9]),
       carrera: r[10] || "", mail: r[11] || "", extra: safeParse_(r[12] || "{}"),
       nota: (r[13] !== undefined && r[13] !== "" && r[13] !== null) ? r[13] : null,
+      colorManual: r[14] || "",
     });
   }
   sortByNumero_(out);
@@ -393,16 +497,18 @@ function getNotas_(comision) {
     if (comision && com !== String(comision).trim()) continue;
     const key = String(r[3]).trim();
     if (!students[key]) {
-      students[key] = { numeroAlumno: r[3], nombre: r[4], comision: com, carrera: r[10] || "", parciales: {} };
+      students[key] = { numeroAlumno: r[3], nombre: r[4], comision: com, carrera: r[10] || "", mail: r[11] || "", parciales: {} };
     } else {
       // se actualiza con lo último declarado, por si cambió de comisión/carrera entre parciales
       students[key].nombre = r[4] || students[key].nombre;
       students[key].comision = com || students[key].comision;
       students[key].carrera = r[10] || students[key].carrera;
+      students[key].mail = r[11] || students[key].mail;
     }
     students[key].parciales[r[0]] = {
       formTitle: r[1], score: r[5], totalPoints: r[6],
       nota: (r[13] !== undefined && r[13] !== "" && r[13] !== null) ? r[13] : null,
+      colorManual: r[14] || "",
     };
   }
 
