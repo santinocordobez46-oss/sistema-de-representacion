@@ -1,10 +1,11 @@
 if (!getApiUrl()) location.href = "index.html";
 
 let notasData = null; // { students, forms }
+let editingInProgress = 0; // >0 mientras haya una edición o un selector de color abiertos — pausa el auto-refresh
 
-async function load() {
+async function load(silent) {
   const container = document.getElementById("notas-container");
-  container.innerHTML = '<p class="empty-note">Cargando…</p>';
+  if (!silent) container.innerHTML = '<p class="empty-note">Cargando…</p>';
   try {
     const res = await apiNotas();
     if (!res.ok) throw new Error(res.error || "Error desconocido");
@@ -12,7 +13,8 @@ async function load() {
     populateComisionFilter();
     renderTable();
   } catch (err) {
-    container.innerHTML = `<p class="empty-note">No se pudo conectar con la planilla (${escapeHtml(String(err.message || err))}).</p>`;
+    if (!silent) container.innerHTML = `<p class="empty-note">No se pudo conectar con la planilla (${escapeHtml(String(err.message || err))}).</p>`;
+    // en modo silencioso (auto-refresh de fondo) no rompemos lo que ya se ve si falla
   }
 }
 
@@ -28,6 +30,59 @@ function populateComisionFilter() {
     }
   });
   sel.value = current;
+}
+
+/* Celda de una nota puntual: el pill de siempre, pero clickeable — al
+   tocarlo se abre un selectcito para forzar el color a verde/rojo o volver
+   a automático (según puntaje). Se guarda al elegir una opción. */
+function buildNotaCell(p, formId, numeroAlumno) {
+  const td = document.createElement("td");
+  if (!p) { td.style.color = "var(--muted)"; td.textContent = "—"; return td; }
+
+  const pill = document.createElement("span");
+  pill.className = `score-pill ${resolveColorClass(p)}`;
+  pill.style.cursor = "pointer";
+  pill.title = "Clic para forzar verde/rojo, o volver a automático";
+  pill.textContent = formatResolvedNota(p);
+  td.appendChild(pill);
+
+  pill.addEventListener("click", () => {
+    editingInProgress++;
+    const sel = document.createElement("select");
+    sel.style.cssText = "font-size:11px; padding:2px 4px; max-width:150px;";
+    [["", "Automático (según puntaje)"], ["verde", "Forzar verde"], ["rojo", "Forzar rojo"]].forEach(([val, label]) => {
+      const opt = document.createElement("option"); opt.value = val; opt.textContent = label;
+      if (val === (p.colorManual || "")) opt.selected = true;
+      sel.appendChild(opt);
+    });
+    td.innerHTML = "";
+    td.appendChild(sel);
+    sel.focus();
+
+    let handled = false;
+    const close = () => {
+      if (handled) return;
+      handled = true;
+      editingInProgress = Math.max(0, editingInProgress - 1);
+      renderTable();
+    };
+    sel.addEventListener("change", async () => {
+      handled = true;
+      sel.disabled = true;
+      try {
+        const res = await apiSetResponseColor(formId, numeroAlumno, sel.value);
+        if (!res.ok) throw new Error(res.error || "El servidor rechazó el cambio.");
+        p.colorManual = sel.value;
+      } catch (err) {
+        alert(`No se pudo guardar el color: ${err.message || err}. Revisá que la implementación de Apps Script esté actualizada (Implementar → Nueva versión) y volvé a intentar.`);
+      }
+      editingInProgress = Math.max(0, editingInProgress - 1);
+      renderTable();
+    });
+    sel.addEventListener("blur", close);
+  });
+
+  return td;
 }
 
 function renderTable() {
@@ -54,7 +109,7 @@ function renderTable() {
   table.className = "results-table";
   const thead = document.createElement("thead");
   thead.innerHTML = `<tr>
-      <th>N° Alumno</th><th>Nombre</th><th>Carrera</th><th>Comisión</th>
+      <th>N° Alumno</th><th>Nombre</th><th>Carrera</th><th>Comisión</th><th>Mail</th>
       ${forms.map((f) => `<th>${escapeHtml(f.title)}</th>`).join("")}
       <th>Total</th><th>Acciones</th>
     </tr>`;
@@ -62,26 +117,72 @@ function renderTable() {
 
   const tbody = document.createElement("tbody");
   students.forEach((s) => {
-    let sumScore = 0, sumMax = 0;
-    const cells = forms.map((f) => {
-      const p = s.parciales[f.id];
-      if (!p) return `<td style="color:var(--muted);">—</td>`;
-      sumScore += Number(p.score) || 0; sumMax += Number(p.totalPoints) || 0;
-      const pct = p.totalPoints > 0 ? p.score / p.totalPoints : 0;
-      return `<td><span class="score-pill ${pct >= 0.6 ? "high" : "low"}">${formatResolvedNota(p)}</span></td>`;
-    }).join("");
     const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${escapeHtml(s.numeroAlumno)}</td>
-      <td>${escapeHtml(s.nombre)}</td>
-      <td>${escapeHtml(s.carrera || "—")}</td>
-      <td>${escapeHtml(s.comision)}</td>
-      ${cells}
-      <td><b>${formatNota(sumScore, sumMax)}</b></td>
-      <td><button class="btn btn-small btn-danger btn-delete-student">Borrar alumno</button></td>`;
+
+    const tdNumero = document.createElement("td"); tdNumero.className = "cell-numero"; tdNumero.textContent = s.numeroAlumno;
+    const tdNombre = document.createElement("td"); tdNombre.className = "cell-nombre"; tdNombre.textContent = s.nombre;
+    const tdCarrera = document.createElement("td"); tdCarrera.textContent = s.carrera || "—";
+    const tdComision = document.createElement("td"); tdComision.textContent = s.comision;
+    const tdMail = document.createElement("td"); tdMail.className = "cell-mail"; tdMail.textContent = s.mail || "—";
+    tr.appendChild(tdNumero); tr.appendChild(tdNombre); tr.appendChild(tdCarrera); tr.appendChild(tdComision); tr.appendChild(tdMail);
+
+    let sumScore = 0, sumMax = 0;
+    forms.forEach((f) => {
+      const p = s.parciales[f.id];
+      if (p) { sumScore += Number(p.score) || 0; sumMax += Number(p.totalPoints) || 0; }
+      tr.appendChild(buildNotaCell(p, f.id, s.numeroAlumno));
+    });
+
+    const tdTotal = document.createElement("td");
+    const totalPill = document.createElement("span");
+    totalPill.className = `score-pill ${resolveColorClass({ score: sumScore, totalPoints: sumMax })}`;
+    totalPill.innerHTML = `<b>${formatNota(sumScore, sumMax)}</b>`;
+    tdTotal.appendChild(totalPill);
+    tr.appendChild(tdTotal);
+
+    const tdActions = document.createElement("td");
+    tdActions.style.whiteSpace = "nowrap";
+    const editBtn = document.createElement("button");
+    editBtn.className = "btn btn-small"; editBtn.textContent = "Editar alumno";
+    const delBtn = document.createElement("button");
+    delBtn.className = "btn btn-small btn-danger"; delBtn.style.marginLeft = "4px";
+    delBtn.textContent = "Borrar alumno";
+    tdActions.appendChild(editBtn); tdActions.appendChild(delBtn);
+    tr.appendChild(tdActions);
     tbody.appendChild(tr);
 
-    tr.querySelector(".btn-delete-student").addEventListener("click", async (ev) => {
+    editBtn.addEventListener("click", () => {
+      const originalNumero = s.numeroAlumno, originalNombre = s.nombre, originalMail = s.mail || "";
+      tdNumero.innerHTML = `<input type="text" class="edit-numero" style="width:70px;" value="${escapeHtml(originalNumero)}">`;
+      tdNombre.innerHTML = `<input type="text" class="edit-nombre" style="width:140px;" value="${escapeHtml(originalNombre)}">`;
+      tdMail.innerHTML = `<input type="email" class="edit-mail" style="width:150px;" value="${escapeHtml(originalMail)}">`;
+      editBtn.textContent = "Guardar";
+      editingInProgress++;
+      const cancelBtn = document.createElement("button");
+      cancelBtn.className = "btn btn-small btn-ghost"; cancelBtn.style.marginLeft = "4px";
+      cancelBtn.textContent = "Cancelar";
+      editBtn.after(cancelBtn);
+      cancelBtn.addEventListener("click", () => { editingInProgress = Math.max(0, editingInProgress - 1); renderTable(); }, { once: true });
+
+      editBtn.addEventListener("click", async () => {
+        const nuevoNumero = tr.querySelector(".edit-numero").value.trim();
+        const nuevoNombre = tr.querySelector(".edit-nombre").value.trim();
+        const nuevoMail = tr.querySelector(".edit-mail").value.trim();
+        if (!nuevoNumero) { alert("El N° de alumno no puede quedar vacío."); return; }
+        editBtn.disabled = true; editBtn.textContent = "Guardando…";
+        try {
+          const res = await apiUpdateStudentInfo(originalNumero, nuevoNumero, nuevoNombre, nuevoMail);
+          if (!res.ok) throw new Error(res.error || "El servidor rechazó el cambio.");
+          editingInProgress = Math.max(0, editingInProgress - 1);
+          load();
+        } catch (err) {
+          alert(`No se pudo guardar: ${err.message || err}. Revisá que la implementación de Apps Script esté actualizada (Implementar → Nueva versión) y volvé a intentar.`);
+          editBtn.disabled = false; editBtn.textContent = "Guardar";
+        }
+      }, { once: true });
+    }, { once: true });
+
+    delBtn.addEventListener("click", async (ev) => {
       if (!confirm(`¿Borrar TODO el historial de ${s.nombre || "este alumno"} (N° ${s.numeroAlumno})? Esto borra sus respuestas en todos los parcialitos y no se puede deshacer.`)) return;
       const btn = ev.currentTarget;
       btn.disabled = true; btn.textContent = "Borrando…";
@@ -102,13 +203,13 @@ function renderTable() {
 
 document.getElementById("filter-comision").addEventListener("change", renderTable);
 document.getElementById("filter-nombre").addEventListener("input", renderTable);
-document.getElementById("btn-refresh").addEventListener("click", load);
+document.getElementById("btn-refresh").addEventListener("click", () => load(false));
 
 document.getElementById("btn-export-xlsx").addEventListener("click", () => {
   if (!notasData || notasData.students.length === 0) { alert("No hay datos para exportar todavía."); return; }
   const forms = notasData.forms;
   const data = sortByComisionYNumero(notasData.students).map((s) => {
-    const row = { "N° Alumno": s.numeroAlumno, "Nombre": s.nombre, "Carrera": s.carrera || "", "Comisión": s.comision };
+    const row = { "N° Alumno": s.numeroAlumno, "Nombre": s.nombre, "Carrera": s.carrera || "", "Comisión": s.comision, "Mail": s.mail || "" };
     let sumScore = 0, sumMax = 0;
     forms.forEach((f) => {
       const p = s.parciales[f.id];
@@ -123,5 +224,47 @@ document.getElementById("btn-export-xlsx").addEventListener("click", () => {
   XLSX.utils.book_append_sheet(wb, ws, "Libro de notas");
   XLSX.writeFile(wb, "libro-de-notas.xlsx");
 });
+
+/* ---------- link/QR público de notas (para compartir con los alumnos) ----------
+   Uno solo sirve para toda la cátedra — el alumno filtra por su comisión
+   desde la misma pantalla. La URL de la planilla va adentro del link (igual
+   que en los QR de "rendir parcialito"), así el alumno no necesita
+   configurar nada para verlo. */
+document.getElementById("btn-share-public").addEventListener("click", () => {
+  const box = document.getElementById("public-share-card");
+  if (box.style.display !== "none") { box.style.display = "none"; return; }
+  if (box.childElementCount === 0) {
+    const baseUrl = location.href.replace(/notas\.html.*$/, "");
+    const shareUrl = `${baseUrl}notas-publicas.html?api=${encodeURIComponent(getApiUrl())}`;
+    const qrImgUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&data=${encodeURIComponent(shareUrl)}`;
+    const card = document.createElement("div");
+    card.className = "qr-card qr-card--solo";
+    card.innerHTML = `
+      <span class="qr-card__com">Vista de notas para alumnos</span>
+      <img src="${qrImgUrl}" width="180" height="180" alt="QR notas públicas" loading="lazy"
+           onerror="this.replaceWith(Object.assign(document.createElement('p'),{className:'empty-note',textContent:'No se pudo generar la imagen del QR (revisá tu conexión) — usá el enlace de abajo.'}))">
+      <div class="share-url-row">
+        <input type="text" readonly value="${escapeHtml(shareUrl)}">
+        <button class="btn btn-small btn-copy">Copiar</button>
+      </div>
+      <p class="hint" style="font-size:11px;color:var(--muted);margin:0;">
+        Ven todos los alumnos y todas las comisiones, con filtro propio. Se actualiza
+        solo — no hace falta volver a generarlo cuando cargues parcialitos nuevos.
+      </p>`;
+    card.querySelector(".btn-copy").addEventListener("click", () => {
+      const inp = card.querySelector('input[type="text"][readonly]');
+      inp.select(); document.execCommand("copy");
+    });
+    box.appendChild(card);
+  }
+  box.style.display = "block";
+});
+
+/* ---------- auto-actualización ----------
+   Cada 25s se refresca solo si no hay una edición o un selector de color
+   abiertos en ese momento (para no pisarle al profesor algo que está
+   escribiendo). Así, si un alumno rinde un parcialito nuevo mientras el
+   profesor tiene esta pantalla abierta, aparece solo. */
+setInterval(() => { if (editingInProgress === 0) load(true); }, 25000);
 
 load();
