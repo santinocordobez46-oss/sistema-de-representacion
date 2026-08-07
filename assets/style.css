@@ -576,7 +576,10 @@ table.results-table th.sortable .sort-arrow{ opacity:.55; margin-left:3px; }
 .qr-card .share-url-row{ display:flex; gap:6px; width:100%; }
 .qr-card input[type=text]{ font-size:11px; padding:7px 9px; }
 .qr-card.qr-card--solo{ max-width: 320px; margin: 0 0 18px; }
-table.results-table th.sortable{ cursor:pointer; user-select:none; white-space:nowrap; }
-table.results-table th.sortable:hover{ background: var(--blue); color:#fff; }
-table.results-table th.sortable .sort-arrow{ opacity:.55; margin-left:3px; }
-.qr-card.qr-card--solo{ max-width: 320px; margin: 0 0 18px; }
+
+/* ---------- escala de cambios de pantalla (más fuerte cuanto más alto) ---------- */
+.tabswitch-pill{ font-family: var(--font-mono); font-weight:700; padding:3px 10px; border-radius: var(--radius-pill); font-size:12px; display:inline-block; }
+.tabswitch-pill.level-0{ background: transparent; color: var(--muted); font-weight:500; padding-left:0; }
+.tabswitch-pill.level-1{ background: var(--warn-soft); color: #8a6d00; }
+.tabswitch-pill.level-2{ background: var(--accent-soft); color: var(--accent-strong); }
+.tabswitch-pill.level-3{ background: var(--accent-strong); color: #fff; }
