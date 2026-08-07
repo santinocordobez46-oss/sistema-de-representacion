@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Notas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<div class="titleblock">
+  <div class="titleblock__main">
+    <p class="titleblock__eyebrow">Libro de notas</p>
+    <h1 class="titleblock__title">Cómo le fue a la cátedra</h1>
+  </div>
+  <div class="titleblock__meta">
+    <div><b id="tb-count">0</b>alumnos</div>
+    <div><span>Verde = aprobado (≥60%) · Rojo = desaprobado</span></div>
+  </div>
+</div>
+
+<div class="app">
+  <div class="results-toolbar">
+    <select id="filter-comision"><option value="">Todas las comisiones</option></select>
+    <input type="text" id="filter-nombre" placeholder="Buscate por nombre o N° de alumno…">
+    <button class="btn" id="btn-refresh">↻ Actualizar</button>
+  </div>
+  <div id="notas-container"><p class="empty-note">Cargando…</p></div>
+</div>
+
+<script src="assets/common.js"></script>
+<script src="assets/notas-publicas.js"></script>
+</body>
+</html>
