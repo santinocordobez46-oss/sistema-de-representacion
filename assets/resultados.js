@@ -5,7 +5,7 @@ const rFormId = rParams.get("id");
 let rForm = null;
 let allRows = [];
 let formQuestions = [];
-let editingInProgress = 0; // >0 mientras haya una edición o un selector de color abiertos — pausa el auto-refresh
+let editingInProgress = 0;
 const TABSWITCH_PREF_KEY = "parcialito_show_tabswitches_v1";
 
 async function init() {
@@ -48,14 +48,9 @@ async function load(silent) {
     renderTable();
   } catch (err) {
     if (!silent) container.innerHTML = `<p class="empty-note">No se pudo conectar con la planilla (${escapeHtml(String(err.message || err))}).</p>`;
-    // en modo silencioso (auto-refresh de fondo) no rompemos lo que ya se ve si falla
   }
 }
 
-/* Reconstruye lo que el alumno realmente eligió/escribió a partir del valor
-   guardado (que viaja como JSON dentro de un string). Para opción múltiple,
-   además traduce el ID interno de la opción (ej. "o_kypabvd") al texto real
-   de esa opción, buscándolo en la definición del formulario. */
 function humanizeAnswer(q, rawRespuesta) {
   let given;
   try { given = JSON.parse(rawRespuesta); } catch (e) { given = rawRespuesta; }
@@ -69,10 +64,6 @@ function humanizeAnswer(q, rawRespuesta) {
   return String(given);
 }
 
-/* El pill de la nota, pero clickeable — al tocarlo se abre un selectcito
-   para forzar el color a verde/rojo o volver a automático (según puntaje).
-   Se guarda al elegir una opción; queda igual en el Libro de notas y en la
-   vista pública de los alumnos, porque todos leen el mismo dato. */
 function buildScoreCell(r) {
   const td = document.createElement("td");
   const pill = document.createElement("span");
@@ -265,14 +256,8 @@ document.getElementById("filter-comision").addEventListener("change", renderTabl
 document.getElementById("filter-nombre").addEventListener("input", renderTable);
 document.getElementById("btn-refresh").addEventListener("click", () => load(false));
 
-/* ---------- auto-actualización ----------
-   Cada 25s se refresca solo si no hay una edición o un selector de color
-   abiertos en ese momento. Así, si están rindiendo el parcial en vivo, las
-   respuestas nuevas van apareciendo solas sin tocar "Actualizar". */
 setInterval(() => { if (editingInProgress === 0) load(true); }, 25000);
 
-/* Quita el marcado tipo markdown (**negrita**, __subrayado__, *cursiva*) para
-   que el encabezado del Excel muestre el enunciado en texto plano y legible. */
 function plainQuestionText(label) {
   return String(label || "")
     .replace(/\*\*(.+?)\*\*/g, "$1")
@@ -288,10 +273,6 @@ document.getElementById("btn-export-xlsx").addEventListener("click", (ev) => {
   btn.disabled = true; btn.textContent = "Generando…";
   try {
     const rows = sortByComisionYNumero(allRows);
-
-    // Las preguntas se toman del propio formulario (no de las respuestas) para
-    // asegurar el mismo orden y las mismas columnas en todas las filas, aunque
-    // algún alumno tenga un detalle incompleto.
     const questions = rForm.sections.flatMap((s) => s.questions);
 
     const headerBase = ["N° Alumno", "Nombre", "Carrera", "Comisión", "Mail"];
