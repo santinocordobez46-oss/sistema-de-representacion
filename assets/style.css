@@ -562,6 +562,9 @@ table.results-table tr:hover td{ background: #faf8ff; }
 .score-pill{ font-family: var(--font-mono); font-weight:700; padding:3px 10px; border-radius: var(--radius-pill); font-size:12px; }
 .score-pill.high{ background: var(--good-soft); color: var(--good); }
 .score-pill.low{ background: var(--accent-soft); color: var(--accent-strong); }
+table.results-table th.sortable{ cursor:pointer; user-select:none; white-space:nowrap; }
+table.results-table th.sortable:hover{ background: var(--blue); color:#fff; }
+table.results-table th.sortable .sort-arrow{ opacity:.55; margin-left:3px; }
 
 /* ---------- tarjetas de QR por comisión ---------- */
 .qr-card{
@@ -572,3 +575,4 @@ table.results-table tr:hover td{ background: #faf8ff; }
 .qr-card img{ border: 1px solid var(--line); border-radius: 10px; }
 .qr-card .share-url-row{ display:flex; gap:6px; width:100%; }
 .qr-card input[type=text]{ font-size:11px; padding:7px 9px; }
+.qr-card.qr-card--solo{ max-width: 320px; margin: 0 0 18px; }
