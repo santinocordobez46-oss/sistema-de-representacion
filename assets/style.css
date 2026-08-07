@@ -28,9 +28,13 @@
   --warn: #f0a91f;          /* sol — destaca opciones múltiples, avisos */
   --warn-soft: #fdf0d6;
 
-  --violet: #8b5cf6;        /* violeta — reservado para faltas/inasistencias, no se usa en ningún otro lado */
-  --violet-soft: #ede9fe;
-  --violet-strong: #6d28d9;
+  --violet: #db2777;        /* magenta — reservado para faltas/inasistencias, no se usa en ningún otro lado */
+  --violet-soft: #fce7f3;
+  --violet-strong: #9d174d;
+
+  --teal: #0d9488;          /* turquesa — reservado para cambios de pantalla, no se usa en ningún otro lado */
+  --teal-soft: #ccfbf1;
+  --teal-strong: #115e59;
 
   --radius: 14px;
   --radius-sm: 9px;
@@ -581,15 +585,16 @@ table.results-table th.sortable .sort-arrow{ opacity:.55; margin-left:3px; }
 .qr-card input[type=text]{ font-size:11px; padding:7px 9px; }
 .qr-card.qr-card--solo{ max-width: 320px; margin: 0 0 18px; }
 
-/* ---------- escala de cambios de pantalla — SIEMPRE en azules, para no
-   confundirse con el verde/rojo de las notas ni con el violeta de faltas ---------- */
+/* ---------- escala de cambios de pantalla — SIEMPRE en turquesas, para no
+   confundirse con el verde/rojo de las notas ni con el magenta de faltas
+   (y para no confundirse con los botones/links, que ya usan azul índigo) ---------- */
 .tabswitch-pill{ font-family: var(--font-mono); font-weight:700; padding:3px 10px; border-radius: var(--radius-pill); font-size:12px; display:inline-block; }
 .tabswitch-pill.level-0{ background: transparent; color: var(--muted); font-weight:500; padding-left:0; }
-.tabswitch-pill.level-1{ background: var(--blue-soft); color: var(--blue); }
-.tabswitch-pill.level-2{ background: var(--blue); color: #fff; }
-.tabswitch-pill.level-3{ background: var(--blue-strong); color: #fff; }
+.tabswitch-pill.level-1{ background: var(--teal-soft); color: var(--teal-strong); }
+.tabswitch-pill.level-2{ background: var(--teal); color: #fff; }
+.tabswitch-pill.level-3{ background: var(--teal-strong); color: #fff; }
 
-/* ---------- escala de faltas/inasistencias — SIEMPRE en violetas ---------- */
+/* ---------- escala de faltas/inasistencias — SIEMPRE en magentas ---------- */
 .faltas-pill{ font-family: var(--font-mono); font-weight:700; padding:3px 10px; border-radius: var(--radius-pill); font-size:12px; display:inline-block; }
 .faltas-pill.level-0{ background: transparent; color: var(--muted); font-weight:500; padding-left:0; }
 .faltas-pill.level-1{ background: var(--violet-soft); color: var(--violet-strong); }
