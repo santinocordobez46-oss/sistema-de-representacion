@@ -1,16 +1,9 @@
-/* ============================================================
-   NOTAS PÚBLICAS — vista de solo lectura para que los alumnos vean
-   cómo les fue a ellos y a sus compañeros, sin tener que configurar
-   nada en el navegador (la URL de la planilla viaja en el link/QR
-   que genera el profesor desde "Libro de notas").
-   ============================================================ */
-
 const qp = new URLSearchParams(location.search);
 const publicApiUrl = qp.get("api") ? decodeURIComponent(qp.get("api")) : "";
 const fixedComision = qp.get("comision") ? decodeURIComponent(qp.get("comision")) : "";
 
-let notasData = null; // { students, forms }
-let sortState = { key: "comision", dir: 1 }; // orden inicial: comisión, después N° de alumno
+let notasData = null;
+let sortState = { key: "comision", dir: 1 };
 
 async function load(silent) {
   const container = document.getElementById("notas-container");
@@ -30,15 +23,12 @@ async function load(silent) {
     renderTable();
   } catch (err) {
     if (!silent) container.innerHTML = `<p class="empty-note">No se pudo conectar con la planilla (${escapeHtml(String(err.message || err))}).</p>`;
-    // en modo silencioso (auto-refresh de fondo), si falla no rompemos lo que ya se está viendo
   }
 }
 
 function populateComisionFilter() {
   const sel = document.getElementById("filter-comision");
   if (fixedComision) {
-    // el link ya trae la comisión fija (por ejemplo, uno generado por comisión) —
-    // no tiene sentido dejar elegir otra.
     sel.innerHTML = `<option value="${escapeHtml(fixedComision)}">${escapeHtml(fixedComision)}</option>`;
     sel.value = fixedComision;
     sel.disabled = true;
@@ -56,8 +46,6 @@ function populateComisionFilter() {
   sel.value = current;
 }
 
-/* Valor numérico de la nota de un alumno en un parcial puntual, para poder
-   ordenar por esa columna. Si no rindió ese parcial, va al final. */
 function notaDe(student, formId) {
   const p = student.parciales[formId];
   return p ? resolveNota(p) : -1;
@@ -85,7 +73,6 @@ function comparator(key) {
   if (key === "total") {
     return (a, b) => totalDe(a, notasData.forms).nota - totalDe(b, notasData.forms).nota;
   }
-  // si no es ninguna de las anteriores, es el id de un parcial puntual
   return (a, b) => notaDe(a, key) - notaDe(b, key);
 }
 
@@ -162,10 +149,6 @@ document.getElementById("filter-comision").addEventListener("change", renderTabl
 document.getElementById("filter-nombre").addEventListener("input", renderTable);
 document.getElementById("btn-refresh").addEventListener("click", () => load(false));
 
-/* Se actualiza sola cada 25s — así, si el profesor carga un parcialito nuevo
-   o corrige una nota mientras el alumno tiene esta pantalla abierta, el
-   cambio aparece sin que tenga que tocar nada. El filtro y el orden elegidos
-   se mantienen (no se resetean con cada actualización). */
 setInterval(() => load(true), 25000);
 
 load();
