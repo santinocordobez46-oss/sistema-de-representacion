@@ -28,17 +28,11 @@
 const SHEET_RESPUESTAS = "Respuestas";
 const SHEET_FORMULARIOS = "Formularios";
 
-/* Normaliza el N° de alumno para comparar: saca espacios y ceros a la
-   izquierda. Esto es necesario porque Google Sheets a veces detecta que
-   "007" es un número y lo guarda como 7, perdiendo los ceros — sin esto,
-   una comparación de texto exacta no encontraría esas filas. */
 function normNum_(v) {
   const s = String(v == null ? "" : v).trim();
   return s.replace(/^0+(?=\d)/, "");
 }
 
-/* Normaliza texto (nombre o mail) para comparar sin importar mayúsculas,
-   minúsculas ni espacios de más al principio/final. */
 function normText_(v) {
   return String(v == null ? "" : v).trim().toLowerCase();
 }
@@ -153,10 +147,6 @@ function deleteForm_(formId) {
   return { ok: true };
 }
 
-/* Borra TODAS las respuestas guardadas de un parcialito puntual (todas las
-   comisiones, todos los alumnos). Se usa junto con deleteForm_ cuando el
-   profesor elige explícitamente borrar también las respuestas, no solo la
-   plantilla del parcialito. No se puede deshacer. */
 function deleteAllResponsesForForm_(formId) {
   const lock = LockService.getScriptLock();
   try {
@@ -194,15 +184,8 @@ function checkSubmitted_(formId, numeroAlumno) {
   return { ok: true, submitted: false };
 }
 
-/* Busca si ese alumno ya respondió ALGÚN parcialito antes (en cualquier
-   comisión) y devuelve sus datos (nombre, N° de alumno, carrera, mail) para
-   autocompletar. Se puede buscar por N° de alumno, por nombre o por mail —
-   se usa el primero de los tres que venga con datos, en ese orden de
-   prioridad. Nombre y mail se comparan sin importar mayúsculas/minúsculas
-   ni espacios de más. Se queda con la fila más reciente si respondió más
-   de un parcialito. */
 function lookupStudent_(numeroAlumno, nombre, mail) {
-  let campo = null; // qué campo se terminó usando para buscar, para el mensaje del frontend
+  let campo = null;
   if (numeroAlumno) campo = "numero";
   else if (nombre) campo = "nombre";
   else if (mail) campo = "mail";
@@ -230,9 +213,6 @@ function lookupStudent_(numeroAlumno, nombre, mail) {
   return { ok: true, found: false, searchedBy: campo };
 }
 
-/* Corrige el N° de alumno (y opcionalmente el nombre) de una respuesta ya
-   guardada, para cuando un alumno lo escribió mal o quedó duplicado. No deja
-   pisar a otro alumno que ya tenga ese número en el MISMO parcialito. */
 function updateResponseStudent_(formId, numeroAlumnoOriginal, numeroAlumnoNuevo, nombreNuevo) {
   if (!numeroAlumnoNuevo) return { ok: false, error: "El N° de alumno no puede quedar vacío." };
   const lock = LockService.getScriptLock();
@@ -263,19 +243,14 @@ function updateResponseStudent_(formId, numeroAlumnoOriginal, numeroAlumnoNuevo,
       }
     }
 
-    sheet.getRange(targetRow + 1, 4).setValue(numeroAlumnoNuevo); // columna D: N° Alumno
-    if (nombreNuevo) sheet.getRange(targetRow + 1, 5).setValue(nombreNuevo); // columna E: Nombre
+    sheet.getRange(targetRow + 1, 4).setValue(numeroAlumnoNuevo);
+    if (nombreNuevo) sheet.getRange(targetRow + 1, 5).setValue(nombreNuevo);
     return { ok: true };
   } finally {
     lock.releaseLock();
   }
 }
 
-/* Fuerza (o quita) el color de una nota puntual, independientemente de si el
-   alumno llegó o no al 60% del puntaje — para cuando el profesor quiere
-   marcarla aprobada/desaprobada "a mano" (por un recuperatorio, una
-   corrección manual, etc). color: "verde" | "rojo" | "" (vuelve a automático,
-   según puntaje). Se guarda en la fila de ESE parcial puntual. */
 function setResponseColor_(formId, numeroAlumno, color) {
   if (["", "verde", "rojo"].indexOf(color) === -1) {
     return { ok: false, error: 'El color tiene que ser "verde", "rojo" o vacío (automático).' };
@@ -291,7 +266,7 @@ function setResponseColor_(formId, numeroAlumno, color) {
     const rows = sheet.getDataRange().getValues();
     for (let i = 1; i < rows.length; i++) {
       if (String(rows[i][0]) === String(formId) && normNum_(rows[i][3]) === normNum_(numeroAlumno)) {
-        sheet.getRange(i + 1, 15).setValue(color); // columna O: Color manual
+        sheet.getRange(i + 1, 15).setValue(color);
         return { ok: true };
       }
     }
@@ -301,11 +276,6 @@ function setResponseColor_(formId, numeroAlumno, color) {
   }
 }
 
-/* Corrige N° de alumno, nombre y/o mail de un alumno en TODO su historial —
-   todas sus respuestas, en todos los parcialitos, no una puntual (para eso
-   está updateResponseStudent_). Se usa desde el Libro de notas, que es la
-   vista que junta todo ese historial en una sola fila. nombreNuevo y
-   mailNuevo son opcionales: si vienen vacíos, no se tocan. */
 function updateStudentInfo_(numeroAlumnoOriginal, numeroAlumnoNuevo, nombreNuevo, mailNuevo) {
   if (!numeroAlumnoNuevo) return { ok: false, error: "El N° de alumno no puede quedar vacío." };
   const lock = LockService.getScriptLock();
@@ -325,8 +295,6 @@ function updateStudentInfo_(numeroAlumnoOriginal, numeroAlumnoNuevo, nombreNuevo
 
     const numeroCambia = normNum_(numeroAlumnoNuevo) !== normNum_(numeroAlumnoOriginal);
     if (numeroCambia) {
-      // el nuevo N° no puede pisar a OTRO alumno que ya tenga respuesta en
-      // alguno de los MISMOS parcialitos que este alumno ya rindió
       const formIdsDeEste = new Set(targetRows.map((i) => String(rows[i][0])));
       for (let i = 1; i < rows.length; i++) {
         if (targetRows.indexOf(i) !== -1) continue;
@@ -337,9 +305,9 @@ function updateStudentInfo_(numeroAlumnoOriginal, numeroAlumnoNuevo, nombreNuevo
     }
 
     targetRows.forEach((i) => {
-      sheet.getRange(i + 1, 4).setValue(numeroAlumnoNuevo); // columna D: N° Alumno
-      if (nombreNuevo) sheet.getRange(i + 1, 5).setValue(nombreNuevo); // columna E: Nombre
-      if (mailNuevo) sheet.getRange(i + 1, 12).setValue(mailNuevo); // columna L: Mail
+      sheet.getRange(i + 1, 4).setValue(numeroAlumnoNuevo);
+      if (nombreNuevo) sheet.getRange(i + 1, 5).setValue(nombreNuevo);
+      if (mailNuevo) sheet.getRange(i + 1, 12).setValue(mailNuevo);
     });
     return { ok: true, updated: targetRows.length };
   } finally {
@@ -347,12 +315,6 @@ function updateStudentInfo_(numeroAlumnoOriginal, numeroAlumnoNuevo, nombreNuevo
   }
 }
 
-/* Estado efectivo del examen: cada comisión puede tener su propio horario
-   (form.comisionSchedules[comision]); si esa comisión no tiene uno propio, se
-   usa el horario general del formulario como respaldo; si no hay nada
-   programado, manda el estado manual (examStatus). Debe reflejar exactamente
-   la misma lógica que computeEffectiveExamStatus() en assets/common.js del
-   frontend. */
 function getScheduleFor_(form, comision) {
   const perComision = comision && form.comisionSchedules ? form.comisionSchedules[comision] : null;
   if (perComision && (perComision.openAt || perComision.closeAt)) return perComision;
@@ -382,9 +344,6 @@ function submitResponse_(data) {
   if (computeEffectiveExamStatus_(formCheck.form, data.comision) !== "abierto") {
     return { ok: false, error: "El profesor todavía no inició el parcial, o ya lo finalizó. No se guardó la respuesta." };
   }
-  // Bloqueo: si varios alumnos envían casi al mismo tiempo, esto evita que dos
-  // envíos se procesen a la vez y se pisen entre sí en la planilla (por ejemplo,
-  // que ambos pasen el chequeo de "ya respondió" antes de que se guarde el otro).
   const lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
@@ -430,9 +389,6 @@ function deleteResponse_(formId, numeroAlumno) {
   }
 }
 
-/* Borra TODAS las respuestas de un alumno (en cualquier parcialito y comisión).
-   Se usa desde el Libro de notas para limpiar alumnos viejos o cargados por
-   error, ya que ahí se ve el historial completo, no uno por parcialito. */
 function deleteStudent_(numeroAlumno) {
   if (!numeroAlumno) return { ok: false, error: "Falta el N° de alumno." };
   const lock = LockService.getScriptLock();
@@ -478,19 +434,14 @@ function getResults_(formId, comision) {
   return { ok: true, rows: out };
 }
 
-/* libro de notas: TODOS los parcialitos, pivotado por alumno.
-   El identificador es SOLO el N° de Alumno (no depende de la comisión), para
-   que la misma persona quede vinculada a través del tiempo aunque haya
-   rendido distintos parciales en distintas comisiones. Se muestra la
-   comisión/carrera más reciente que declaró. */
 function getNotas_(comision) {
   const sheet = getRespuestasSheet_();
   const rows = sheet.getDataRange().getValues();
-  const forms = listForms_().forms.slice().sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt)); // cronológico: Parcial 0, 1, 2...
+  const forms = listForms_().forms.slice().sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
   const order = {};
   forms.forEach((f, idx) => { order[f.id] = { title: f.title, idx }; });
 
-  const students = {}; // key = numeroAlumno (identificador único del sistema)
+  const students = {};
   for (let i = 1; i < rows.length; i++) {
     const r = rows[i];
     const com = String(r[2]).trim();
@@ -499,7 +450,6 @@ function getNotas_(comision) {
     if (!students[key]) {
       students[key] = { numeroAlumno: r[3], nombre: r[4], comision: com, carrera: r[10] || "", mail: r[11] || "", parciales: {} };
     } else {
-      // se actualiza con lo último declarado, por si cambió de comisión/carrera entre parciales
       students[key].nombre = r[4] || students[key].nombre;
       students[key].comision = com || students[key].comision;
       students[key].carrera = r[10] || students[key].carrera;
