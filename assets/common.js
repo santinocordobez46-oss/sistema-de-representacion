@@ -41,6 +41,28 @@ async function apiLookupStudent(numeroAlumno) { return apiGet("lookupstudent", {
 async function apiUpdateResponse(formId, numeroAlumnoOriginal, numeroAlumnoNuevo, nombreNuevo) {
   return apiPost({ action: "updateresponse", formId, numeroAlumnoOriginal, numeroAlumnoNuevo, nombreNuevo });
 }
+async function apiSetResponseColor(formId, numeroAlumno, color) {
+  return apiPost({ action: "setresponsecolor", formId, numeroAlumno, color });
+}
+async function apiUpdateStudentInfo(numeroAlumnoOriginal, numeroAlumnoNuevo, nombreNuevo, mailNuevo) {
+  return apiPost({ action: "updatestudentinfo", numeroAlumnoOriginal, numeroAlumnoNuevo, nombreNuevo, mailNuevo });
+}
+
+/* ---------- variante para páginas públicas (sin login del profesor) ----------
+   Las mismas llamadas GET de arriba, pero con la URL de la API pasada
+   explícitamente (viene de la URL del link/QR, ?api=...) en vez de leerla
+   de localStorage — así un alumno puede abrir el link sin haber configurado
+   nada en ese navegador. */
+async function apiGetExplicit(apiUrl, action, extraParams = {}) {
+  const url = new URL(apiUrl);
+  url.searchParams.set("action", action);
+  Object.entries(extraParams).forEach(([k, v]) => url.searchParams.set(k, v));
+  const res = await fetch(url.toString());
+  return res.json();
+}
+async function apiNotasPublic(apiUrl, comision) {
+  return apiGetExplicit(apiUrl, "notas", comision ? { comision } : {});
+}
 
 /* ---------- normalización para corrección ---------- */
 function normalizeText(s) {
@@ -310,6 +332,17 @@ function resolveNota(row) {
 }
 function formatResolvedNota(row) {
   return formatNotaValue(resolveNota(row));
+}
+
+/* Decide qué clase de color usar para el "score-pill" de una nota: si el
+   profesor la forzó a mano (colorManual: "verde"/"rojo"), se respeta esa
+   decisión pase lo que pase con el puntaje. Si no, se calcula solo con el
+   60% de siempre. */
+function resolveColorClass(row) {
+  if (row && row.colorManual === "verde") return "high";
+  if (row && row.colorManual === "rojo") return "low";
+  const pct = row && row.totalPoints > 0 ? (Number(row.score) || 0) / row.totalPoints : 0;
+  return pct >= 0.6 ? "high" : "low";
 }
 
 function formatRichText(escapedText) {
