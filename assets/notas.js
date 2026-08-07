@@ -14,7 +14,6 @@ async function load(silent) {
     renderTable();
   } catch (err) {
     if (!silent) container.innerHTML = `<p class="empty-note">No se pudo conectar con la planilla (${escapeHtml(String(err.message || err))}).</p>`;
-    // en modo silencioso (auto-refresh de fondo) no rompemos lo que ya se ve si falla
   }
 }
 
@@ -32,9 +31,6 @@ function populateComisionFilter() {
   sel.value = current;
 }
 
-/* Celda de una nota puntual: el pill de siempre, pero clickeable — al
-   tocarlo se abre un selectcito para forzar el color a verde/rojo o volver
-   a automático (según puntaje). Se guarda al elegir una opción. */
 function buildNotaCell(p, formId, numeroAlumno) {
   const td = document.createElement("td");
   if (!p) { td.style.color = "var(--muted)"; td.textContent = "—"; return td; }
@@ -111,7 +107,7 @@ function renderTable() {
   thead.innerHTML = `<tr>
       <th>N° Alumno</th><th>Nombre</th><th>Carrera</th><th>Comisión</th><th>Mail</th>
       ${forms.map((f) => `<th>${escapeHtml(f.title)}</th>`).join("")}
-      <th>Total</th><th>Acciones</th>
+      <th>Total</th><th>Cambios pantalla (total)</th><th>Acciones</th>
     </tr>`;
   table.appendChild(thead);
 
@@ -126,10 +122,10 @@ function renderTable() {
     const tdMail = document.createElement("td"); tdMail.className = "cell-mail"; tdMail.textContent = s.mail || "—";
     tr.appendChild(tdNumero); tr.appendChild(tdNombre); tr.appendChild(tdCarrera); tr.appendChild(tdComision); tr.appendChild(tdMail);
 
-    let sumScore = 0, sumMax = 0;
+    let sumScore = 0, sumMax = 0, sumTabSwitches = 0;
     forms.forEach((f) => {
       const p = s.parciales[f.id];
-      if (p) { sumScore += Number(p.score) || 0; sumMax += Number(p.totalPoints) || 0; }
+      if (p) { sumScore += Number(p.score) || 0; sumMax += Number(p.totalPoints) || 0; sumTabSwitches += Number(p.tabSwitches) || 0; }
       tr.appendChild(buildNotaCell(p, f.id, s.numeroAlumno));
     });
 
@@ -139,6 +135,11 @@ function renderTable() {
     totalPill.innerHTML = `<b>${formatNota(sumScore, sumMax)}</b>`;
     tdTotal.appendChild(totalPill);
     tr.appendChild(tdTotal);
+
+    const tdTabSwitches = document.createElement("td");
+    tdTabSwitches.textContent = sumTabSwitches;
+    if (sumTabSwitches > 0) tdTabSwitches.style.cssText = "color:var(--accent-strong); font-weight:600;";
+    tr.appendChild(tdTabSwitches);
 
     const tdActions = document.createElement("td");
     tdActions.style.whiteSpace = "nowrap";
@@ -210,13 +211,14 @@ document.getElementById("btn-export-xlsx").addEventListener("click", () => {
   const forms = notasData.forms;
   const data = sortByComisionYNumero(notasData.students).map((s) => {
     const row = { "N° Alumno": s.numeroAlumno, "Nombre": s.nombre, "Carrera": s.carrera || "", "Comisión": s.comision, "Mail": s.mail || "" };
-    let sumScore = 0, sumMax = 0;
+    let sumScore = 0, sumMax = 0, sumTabSwitches = 0;
     forms.forEach((f) => {
       const p = s.parciales[f.id];
       row[f.title] = p ? resolveNota(p) : "—";
-      if (p) { sumScore += Number(p.score) || 0; sumMax += Number(p.totalPoints) || 0; }
+      if (p) { sumScore += Number(p.score) || 0; sumMax += Number(p.totalPoints) || 0; sumTabSwitches += Number(p.tabSwitches) || 0; }
     });
     row["Nota Total"] = scoreToNota(sumScore, sumMax);
+    row["Cambios de pantalla (total)"] = sumTabSwitches;
     return row;
   });
   const ws = XLSX.utils.json_to_sheet(data);
@@ -225,11 +227,6 @@ document.getElementById("btn-export-xlsx").addEventListener("click", () => {
   XLSX.writeFile(wb, "libro-de-notas.xlsx");
 });
 
-/* ---------- link/QR público de notas (para compartir con los alumnos) ----------
-   Uno solo sirve para toda la cátedra — el alumno filtra por su comisión
-   desde la misma pantalla. La URL de la planilla va adentro del link (igual
-   que en los QR de "rendir parcialito"), así el alumno no necesita
-   configurar nada para verlo. */
 document.getElementById("btn-share-public").addEventListener("click", () => {
   const box = document.getElementById("public-share-card");
   if (box.style.display !== "none") { box.style.display = "none"; return; }
@@ -260,11 +257,6 @@ document.getElementById("btn-share-public").addEventListener("click", () => {
   box.style.display = "block";
 });
 
-/* ---------- auto-actualización ----------
-   Cada 25s se refresca solo si no hay una edición o un selector de color
-   abiertos en ese momento (para no pisarle al profesor algo que está
-   escribiendo). Así, si un alumno rinde un parcialito nuevo mientras el
-   profesor tiene esta pantalla abierta, aparece solo. */
 setInterval(() => { if (editingInProgress === 0) load(true); }, 25000);
 
 load();
