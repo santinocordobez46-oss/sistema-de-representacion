@@ -28,6 +28,10 @@
   --warn: #f0a91f;          /* sol — destaca opciones múltiples, avisos */
   --warn-soft: #fdf0d6;
 
+  --violet: #8b5cf6;        /* violeta — reservado para faltas/inasistencias, no se usa en ningún otro lado */
+  --violet-soft: #ede9fe;
+  --violet-strong: #6d28d9;
+
   --radius: 14px;
   --radius-sm: 9px;
   --radius-pill: 999px;
@@ -577,9 +581,17 @@ table.results-table th.sortable .sort-arrow{ opacity:.55; margin-left:3px; }
 .qr-card input[type=text]{ font-size:11px; padding:7px 9px; }
 .qr-card.qr-card--solo{ max-width: 320px; margin: 0 0 18px; }
 
-/* ---------- escala de cambios de pantalla (más fuerte cuanto más alto) ---------- */
+/* ---------- escala de cambios de pantalla — SIEMPRE en azules, para no
+   confundirse con el verde/rojo de las notas ni con el violeta de faltas ---------- */
 .tabswitch-pill{ font-family: var(--font-mono); font-weight:700; padding:3px 10px; border-radius: var(--radius-pill); font-size:12px; display:inline-block; }
 .tabswitch-pill.level-0{ background: transparent; color: var(--muted); font-weight:500; padding-left:0; }
-.tabswitch-pill.level-1{ background: var(--warn-soft); color: #8a6d00; }
-.tabswitch-pill.level-2{ background: var(--accent-soft); color: var(--accent-strong); }
-.tabswitch-pill.level-3{ background: var(--accent-strong); color: #fff; }
+.tabswitch-pill.level-1{ background: var(--blue-soft); color: var(--blue); }
+.tabswitch-pill.level-2{ background: var(--blue); color: #fff; }
+.tabswitch-pill.level-3{ background: var(--blue-strong); color: #fff; }
+
+/* ---------- escala de faltas/inasistencias — SIEMPRE en violetas ---------- */
+.faltas-pill{ font-family: var(--font-mono); font-weight:700; padding:3px 10px; border-radius: var(--radius-pill); font-size:12px; display:inline-block; }
+.faltas-pill.level-0{ background: transparent; color: var(--muted); font-weight:500; padding-left:0; }
+.faltas-pill.level-1{ background: var(--violet-soft); color: var(--violet-strong); }
+.faltas-pill.level-2{ background: var(--violet); color: #fff; }
+.faltas-pill.level-3{ background: var(--violet-strong); color: #fff; }
