@@ -244,13 +244,43 @@ document.getElementById("btn-share-public").addEventListener("click", () => {
         <input type="text" readonly value="${escapeHtml(shareUrl)}">
         <button class="btn btn-small btn-copy">Copiar</button>
       </div>
+      <button class="btn btn-small btn-download-qr" style="width:100%;">🖼 Descargar QR</button>
       <p class="hint" style="font-size:11px;color:var(--muted);margin:0;">
-        Ven todos los alumnos y todas las comisiones, con filtro propio. Se actualiza
-        solo — no hace falta volver a generarlo cuando cargues parcialitos nuevos.
+        Ven todos los alumnos y todas las comisiones, con filtro propio. Este link/QR
+        es siempre el mismo — no hace falta volver a generarlo cuando cargues
+        parcialitos nuevos, ni cuando actualices el código (mientras uses
+        "Editar → Nueva versión" en Apps Script, no una implementación nueva).
       </p>`;
     card.querySelector(".btn-copy").addEventListener("click", () => {
       const inp = card.querySelector('input[type="text"][readonly]');
       inp.select(); document.execCommand("copy");
+    });
+    card.querySelector(".btn-download-qr").addEventListener("click", async (ev) => {
+      const btn = ev.currentTarget;
+      const original = btn.textContent;
+      btn.disabled = true; btn.textContent = "Generando…";
+      try {
+        const img = await new Promise((resolve, reject) => {
+          const im = new Image();
+          im.crossOrigin = "anonymous";
+          im.onload = () => resolve(im);
+          im.onerror = reject;
+          im.src = qrImgUrl;
+        });
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width; canvas.height = img.height;
+        canvas.getContext("2d").drawImage(img, 0, 0);
+        canvas.toBlob((blob) => {
+          const a = document.createElement("a");
+          a.href = URL.createObjectURL(blob);
+          a.download = "qr-notas-alumnos.png";
+          a.click();
+          URL.revokeObjectURL(a.href);
+        }, "image/png");
+      } catch (e) {
+        alert("No se pudo descargar el QR. Probá de nuevo, o usá el enlace de abajo para copiarlo.");
+      }
+      btn.disabled = false; btn.textContent = original;
     });
     box.appendChild(card);
   }
