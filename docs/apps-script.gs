@@ -506,7 +506,7 @@ function getNotas_(comision) {
       students[key].mail = r[11] || students[key].mail;
     }
     students[key].parciales[r[0]] = {
-      formTitle: r[1], score: r[5], totalPoints: r[6],
+      formTitle: r[1], score: r[5], totalPoints: r[6], tabSwitches: r[8] || 0,
       nota: (r[13] !== undefined && r[13] !== "" && r[13] !== null) ? r[13] : null,
       colorManual: r[14] || "",
     };
