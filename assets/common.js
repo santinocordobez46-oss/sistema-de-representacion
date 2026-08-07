@@ -366,11 +366,11 @@ function tabSwitchInfo(n) {
 function faltasInfo(faltas, totalForms) {
   const total = Number(totalForms) || 0;
   const count = Number(faltas) || 0;
-  if (total <= 0 || count <= 0) return { label: "Sin faltas", className: "tabswitch-pill level-0" };
+  if (total <= 0 || count <= 0) return { label: "Sin faltas", className: "faltas-pill level-0" };
   const pct = count / total;
-  if (pct <= 0.25) return { label: "Leve", className: "tabswitch-pill level-1" };
-  if (pct <= 0.5) return { label: "Moderado", className: "tabswitch-pill level-2" };
-  return { label: "Grave", className: "tabswitch-pill level-3" };
+  if (pct <= 0.25) return { label: "Leve", className: "faltas-pill level-1" };
+  if (pct <= 0.5) return { label: "Moderado", className: "faltas-pill level-2" };
+  return { label: "Grave", className: "faltas-pill level-3" };
 }
 
 function formatRichText(escapedText) {
