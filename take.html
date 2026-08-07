@@ -122,60 +122,89 @@ function renderIdentity() {
   card.className = "take-question";
   card.innerHTML = `<div class="take-question__label">${formatRichText(escapeHtml(cfg.welcomeMessage || "Antes de empezar"))}</div>`;
 
-  let nameInp = null;
-  if (cfg.showApellidoNombre !== false) {
-    const nameField = document.createElement("div");
-    nameField.innerHTML = `<label class="field-label">Apellido/s y Nombre/s</label>`;
-    nameInp = document.createElement("input"); nameInp.type = "text";
-    nameField.appendChild(nameInp); card.appendChild(nameField);
+  let nameInp = null, numInp = null, mailInp = null, carreraSel = null;
+
+  /* Campo de texto simple, sin botón propio — la comprobación es una sola,
+     compartida por los tres campos de identidad (ver más abajo). */
+  function buildField(labelText, inputType, extraInputProps) {
+    const field = document.createElement("div");
+    field.innerHTML = `<label class="field-label">${escapeHtml(labelText)}</label>`;
+    const inp = document.createElement("input");
+    inp.type = inputType;
+    if (extraInputProps) Object.assign(inp, extraInputProps);
+    field.appendChild(inp);
+    card.appendChild(field);
+    return inp;
   }
 
-  const numField = document.createElement("div");
-  numField.innerHTML = `<label class="field-label">N° de alumno (3 dígitos, ej. 007)</label>`;
-  const numRow = document.createElement("div");
-  numRow.style.cssText = "display:flex; gap:8px; align-items:center;";
-  const numInp = document.createElement("input"); numInp.type = "text"; numInp.inputMode = "numeric"; numInp.maxLength = 3;
-  numInp.style.flex = "1";
+  if (cfg.showApellidoNombre !== false) {
+    nameInp = buildField("Apellido/s y Nombre/s", "text");
+  }
+
+  numInp = buildField("N° de alumno (3 dígitos, ej. 007)", "text", { inputMode: "numeric", maxLength: 3 });
+
+  if (cfg.showMail) {
+    mailInp = buildField("Mail", "email");
+  }
+
+  /* Un solo botón "Comprobar" para los tres campos de arriba (Nombre,
+     N° de alumno, Mail): busca por el que el alumno haya completado —
+     con prioridad N° de alumno > nombre > mail si completó más de uno —
+     y con lo que encuentre autocompleta/pisa los demás. Todo queda
+     editable después, por si hay que corregir algo (número mal tipeado,
+     nombre mal escrito, etc). La comparación de nombre y mail no
+     distingue mayúsculas de minúsculas. */
+  const checkWrap = document.createElement("div");
+  checkWrap.style.cssText = "margin-top:4px;";
   const checkBtn = document.createElement("button");
-  checkBtn.type = "button"; checkBtn.className = "btn btn-small"; checkBtn.textContent = "Comprobar";
+  checkBtn.type = "button"; checkBtn.className = "btn btn-small"; checkBtn.textContent = "Comprobar mis datos";
   const checkMsg = document.createElement("div");
-  checkMsg.style.cssText = "font-size:12px; margin-top:4px;";
+  checkMsg.style.cssText = "font-size:12px; margin-top:6px;";
   checkBtn.addEventListener("click", async () => {
-    const num = numInp.value.trim();
-    if (!/^\d{3}$/.test(num)) { checkMsg.textContent = "Ingresá tus 3 dígitos primero."; checkMsg.style.color = "var(--accent-strong)"; return; }
-    checkBtn.disabled = true; checkBtn.textContent = "Buscando…";
+    const numVal = numInp.value.trim();
+    const nameVal = nameInp ? nameInp.value.trim() : "";
+    const mailVal = mailInp ? mailInp.value.trim() : "";
+
+    let paramKey, value;
+    if (/^\d{3}$/.test(numVal)) { paramKey = "numeroAlumno"; value = numVal; }
+    else if (nameVal) { paramKey = "nombre"; value = nameVal; }
+    else if (mailVal) { paramKey = "mail"; value = mailVal; }
+    else {
+      checkMsg.textContent = "Completá tu N° de alumno (3 dígitos), tu nombre o tu mail para poder comprobar.";
+      checkMsg.style.color = "var(--accent-strong)";
+      return;
+    }
+
+    checkBtn.disabled = true;
+    const prevText = checkBtn.textContent;
+    checkBtn.textContent = "Buscando…";
     try {
       const url = new URL(takeApiUrl);
       url.searchParams.set("action", "lookupstudent");
-      url.searchParams.set("numeroAlumno", num);
+      url.searchParams.set(paramKey, value);
       const fetchRes = await fetch(url.toString());
       const res = await fetchRes.json();
       if (res.ok && res.found) {
         if (nameInp && res.nombre) nameInp.value = res.nombre;
+        if (numInp && res.numeroAlumno) numInp.value = res.numeroAlumno;
         if (carreraSel && res.carrera) carreraSel.value = res.carrera;
         if (mailInp && res.mail) mailInp.value = res.mail;
-        checkMsg.textContent = "Te reconocimos de un parcialito anterior — completamos tus datos.";
+        checkMsg.textContent = "Te reconocimos de un parcialito anterior — completamos tus datos. Podés corregir cualquier campo si hace falta.";
         checkMsg.style.color = "var(--good)";
       } else {
-        checkMsg.textContent = "No encontramos ese N° todavía, completá tus datos manualmente.";
-        checkMsg.style.color = "var(--muted)";
+        const labels = { numeroAlumno: "el N° de alumno", nombre: "el nombre", mail: "el mail" };
+        checkMsg.textContent = `No encontramos ${labels[paramKey]} "${value}" registrado. Revisá que esté bien escrito, o completá tus datos manualmente.`;
+        checkMsg.style.color = "var(--accent-strong)";
       }
     } catch (e) {
       checkMsg.textContent = "No se pudo comprobar en este momento.";
       checkMsg.style.color = "var(--accent-strong)";
     }
-    checkBtn.disabled = false; checkBtn.textContent = "Comprobar";
+    checkBtn.disabled = false; checkBtn.textContent = prevText;
   });
-  numRow.appendChild(numInp); numRow.appendChild(checkBtn);
-  numField.appendChild(numRow); numField.appendChild(checkMsg); card.appendChild(numField);
-
-  let mailInp = null;
-  if (cfg.showMail) {
-    const mailField = document.createElement("div");
-    mailField.innerHTML = `<label class="field-label">Mail</label>`;
-    mailInp = document.createElement("input"); mailInp.type = "email";
-    mailField.appendChild(mailInp); card.appendChild(mailField);
-  }
+  checkWrap.appendChild(checkBtn);
+  checkWrap.appendChild(checkMsg);
+  card.appendChild(checkWrap);
 
   const customInputs = []; // { field, getValue }
   (cfg.customFields || []).forEach((field) => {
@@ -197,7 +226,6 @@ function renderIdentity() {
     card.appendChild(fieldWrap);
   });
 
-  let carreraSel = null;
   if (form.carreras && form.carreras.length > 0) {
     const carreraField = document.createElement("div");
     carreraField.innerHTML = `<label class="field-label">Carrera</label>`;
