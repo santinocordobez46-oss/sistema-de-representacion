@@ -41,9 +41,9 @@ const fixedComision = qp.get("comision") ? decodeURIComponent(qp.get("comision")
 const SUBMITTED_KEY_PREFIX = "parcialito_submitted_";
 
 let form = null;
-let tabSwitchesByQuestion = {}; // { [questionId]: cantidad de veces que salió estando en esa pregunta }
-let tabSwitchesGeneral = 0; // cambios de pantalla antes de llegar a alguna pregunta (pantalla de identidad)
-let currentQuestionId = null; // qué pregunta se está mostrando ahora mismo (para saber a quién sumarle el cambio)
+let tabSwitchesByQuestion = {};
+let tabSwitchesGeneral = 0;
+let currentQuestionId = null;
 let timerInterval = null;
 const identityRoot = document.getElementById("identity-root");
 const takeRoot = document.getElementById("take-root");
@@ -73,8 +73,6 @@ async function boot() {
   document.getElementById("tb-count").textContent = allQuestions.length;
   document.getElementById("tb-points").textContent = totalPoints + " pts";
 
-  // si este mismo navegador ya mandó una respuesta para este parcialito, no
-  // hace falta pedirle de nuevo los datos ni dejarlo pasar otra vez
   const already = localStorage.getItem(SUBMITTED_KEY_PREFIX + form.id);
   if (already) {
     try {
@@ -124,8 +122,6 @@ function renderIdentity() {
 
   let nameInp = null, numInp = null, mailInp = null, carreraSel = null;
 
-  /* Campo de texto simple, sin botón propio — la comprobación es una sola,
-     compartida por los tres campos de identidad (ver más abajo). */
   function buildField(labelText, inputType, extraInputProps) {
     const field = document.createElement("div");
     field.innerHTML = `<label class="field-label">${escapeHtml(labelText)}</label>`;
@@ -147,13 +143,6 @@ function renderIdentity() {
     mailInp = buildField("Mail", "email");
   }
 
-  /* Un solo botón "Comprobar" para los tres campos de arriba (Nombre,
-     N° de alumno, Mail): busca por el que el alumno haya completado —
-     con prioridad N° de alumno > nombre > mail si completó más de uno —
-     y con lo que encuentre autocompleta/pisa los demás. Todo queda
-     editable después, por si hay que corregir algo (número mal tipeado,
-     nombre mal escrito, etc). La comparación de nombre y mail no
-     distingue mayúsculas de minúsculas. */
   const checkWrap = document.createElement("div");
   checkWrap.style.cssText = "margin-top:4px;";
   const checkBtn = document.createElement("button");
@@ -206,7 +195,7 @@ function renderIdentity() {
   checkWrap.appendChild(checkMsg);
   card.appendChild(checkWrap);
 
-  const customInputs = []; // { field, getValue }
+  const customInputs = [];
   (cfg.customFields || []).forEach((field) => {
     const fieldWrap = document.createElement("div");
     fieldWrap.innerHTML = `<label class="field-label">${escapeHtml(field.label || "Campo")}</label>`;
@@ -338,10 +327,6 @@ function renderTake(identity) {
     }
   }
 
-  // Traba de "volver atrás" del navegador: cada vez que avanzamos, empujamos
-  // un estado nuevo al historial. Si el alumno toca "atrás" del navegador,
-  // en vez de volver, lo empujamos de nuevo para adelante. No es 100%
-  // infalible (nada del lado del navegador lo es), pero cubre el caso común.
   history.pushState({ take: true, q: 0 }, "", location.href);
   window.addEventListener("popstate", () => { history.pushState({ take: true, q: qIndex }, "", location.href); });
 
@@ -457,11 +442,6 @@ function renderTake(identity) {
     return true;
   }
 
-  /* Traduce lo que el alumno marcó/escribió a texto legible ANTES de guardarlo,
-     usando las opciones del formulario tal como están en este mismo momento
-     (que es el único momento en que el ID de opción tiene garantía de
-     coincidir). Así el resultado queda legible para siempre, aunque el
-     profesor edite el parcialito más adelante. */
   function humanizeGivenAnswer(q, given) {
     if (given === undefined || given === null || given === "") return q.multiSelect ? "" : "";
     if (q.type === "multiple_choice") {
