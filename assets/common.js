@@ -345,6 +345,34 @@ function resolveColorClass(row) {
   return pct >= 0.6 ? "high" : "low";
 }
 
+/* Escala de colores para cambios de pantalla: cuantos más, más fuerte el
+   color — de neutro, a amarillo (leve), a naranja (moderado), a rojo intenso
+   (grave). Los cortes (2 / 5) son un default razonable; si el profesor
+   quiere otros números, se cambian acá nomás. */
+function tabSwitchInfo(n) {
+  const count = Number(n) || 0;
+  if (count === 0) return { level: 0, label: "Sin salidas de pantalla", className: "tabswitch-pill level-0" };
+  if (count <= 2) return { level: 1, label: "Leve", className: "tabswitch-pill level-1" };
+  if (count <= 5) return { level: 2, label: "Moderado", className: "tabswitch-pill level-2" };
+  return { level: 3, label: "Grave", className: "tabswitch-pill level-3" };
+}
+
+/* Cuántos parcialitos de TODOS los que existen un alumno no rindió — se
+   considera falta cualquier parcialito para el que no haya una respuesta
+   suya, sin importar el motivo. Reutiliza la misma escala visual de colores
+   que los cambios de pantalla (más faltas, más fuerte el color), pero acá
+   el corte es por PROPORCIÓN sobre el total de parcialitos, no un número fijo,
+   porque no es lo mismo faltar a 1 de 3 que a 1 de 12. */
+function faltasInfo(faltas, totalForms) {
+  const total = Number(totalForms) || 0;
+  const count = Number(faltas) || 0;
+  if (total <= 0 || count <= 0) return { label: "Sin faltas", className: "tabswitch-pill level-0" };
+  const pct = count / total;
+  if (pct <= 0.25) return { label: "Leve", className: "tabswitch-pill level-1" };
+  if (pct <= 0.5) return { label: "Moderado", className: "tabswitch-pill level-2" };
+  return { label: "Grave", className: "tabswitch-pill level-3" };
+}
+
 function formatRichText(escapedText) {
   return String(escapedText)
     .replace(/\*\*(.+?)\*\*/g, "<b>$1</b>")
