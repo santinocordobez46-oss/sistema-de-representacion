@@ -1,7 +1,7 @@
 if (!getApiUrl()) location.href = "index.html";
 
-let notasData = null; // { students, forms }
-let editingInProgress = 0; // >0 mientras haya una edición o un selector de color abiertos — pausa el auto-refresh
+let notasData = null;
+let editingInProgress = 0;
 
 async function load(silent) {
   const container = document.getElementById("notas-container");
@@ -14,7 +14,6 @@ async function load(silent) {
     renderTable();
   } catch (err) {
     if (!silent) container.innerHTML = `<p class="empty-note">No se pudo conectar con la planilla (${escapeHtml(String(err.message || err))}).</p>`;
-    // en modo silencioso (auto-refresh de fondo) no rompemos lo que ya se ve si falla
   }
 }
 
@@ -32,9 +31,6 @@ function populateComisionFilter() {
   sel.value = current;
 }
 
-/* Celda de una nota puntual: el pill de siempre, pero clickeable — al
-   tocarlo se abre un selectcito para forzar el color a verde/rojo o volver
-   a automático (según puntaje). Se guarda al elegir una opción. */
 function buildNotaCell(p, formId, numeroAlumno) {
   const td = document.createElement("td");
   if (!p) { td.style.color = "var(--muted)"; td.textContent = "—"; return td; }
@@ -219,30 +215,43 @@ document.getElementById("btn-refresh").addEventListener("click", () => load(fals
 document.getElementById("btn-export-xlsx").addEventListener("click", () => {
   if (!notasData || notasData.students.length === 0) { alert("No hay datos para exportar todavía."); return; }
   const forms = notasData.forms;
-  const data = sortByComisionYNumero(notasData.students).map((s) => {
-    const row = { "N° Alumno": s.numeroAlumno, "Nombre": s.nombre, "Carrera": s.carrera || "", "Comisión": s.comision, "Mail": s.mail || "" };
+  const students = sortByComisionYNumero(notasData.students);
+
+  const headerLabels = ["N° Alumno", "Nombre", "Carrera", "Comisión", "Mail", ...forms.map((f) => f.title), "Nota Total", "Faltas", "Cambios de pantalla (total)"];
+  const aoa = [headerLabels.map((label) => xlsxCell(label, { style: xlsxHeaderStyle() }))];
+
+  students.forEach((s) => {
     let sumScore = 0, sumMax = 0, sumTabSwitches = 0, rendidos = 0;
-    forms.forEach((f) => {
+    const notaCells = forms.map((f) => {
       const p = s.parciales[f.id];
-      row[f.title] = p ? resolveNota(p) : "—";
-      if (p) { sumScore += Number(p.score) || 0; sumMax += Number(p.totalPoints) || 0; sumTabSwitches += Number(p.tabSwitches) || 0; rendidos++; }
+      if (!p) return xlsxCell("—");
+      sumScore += Number(p.score) || 0; sumMax += Number(p.totalPoints) || 0; sumTabSwitches += Number(p.tabSwitches) || 0; rendidos++;
+      return xlsxCell(resolveNota(p), { style: xlsxNotaStyle(resolveColorClass(p) === "high") });
     });
-    row["Nota Total"] = scoreToNota(sumScore, sumMax);
-    row["Faltas"] = forms.length - rendidos;
-    row["Cambios de pantalla (total)"] = sumTabSwitches;
-    return row;
+    const faltas = forms.length - rendidos;
+    const totalNota = scoreToNota(sumScore, sumMax);
+    const totalAprobado = resolveColorClass({ score: sumScore, totalPoints: sumMax }) === "high";
+
+    aoa.push([
+      xlsxCell(s.numeroAlumno), xlsxCell(s.nombre), xlsxCell(s.carrera || ""), xlsxCell(s.comision), xlsxCell(s.mail || ""),
+      ...notaCells,
+      xlsxCell(totalNota, { style: xlsxNotaStyle(totalAprobado) }),
+      xlsxCell(faltas, { style: xlsxFaltasStyle(faltas, forms.length) }),
+      xlsxCell(sumTabSwitches, { style: xlsxTabSwitchStyle(sumTabSwitches) }),
+    ]);
   });
-  const ws = XLSX.utils.json_to_sheet(data);
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws["!cols"] = [
+    { wch: 10 }, { wch: 22 }, { wch: 16 }, { wch: 14 }, { wch: 24 },
+    ...forms.map(() => ({ wch: 10 })),
+    { wch: 10 }, { wch: 8 }, { wch: 12 },
+  ];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Libro de notas");
   XLSX.writeFile(wb, "libro-de-notas.xlsx");
 });
 
-/* ---------- link/QR público de notas (para compartir con los alumnos) ----------
-   Uno solo sirve para toda la cátedra — el alumno filtra por su comisión
-   desde la misma pantalla. La URL de la planilla va adentro del link (igual
-   que en los QR de "rendir parcialito"), así el alumno no necesita
-   configurar nada para verlo. */
 document.getElementById("btn-share-public").addEventListener("click", () => {
   const box = document.getElementById("public-share-card");
   if (box.style.display !== "none") { box.style.display = "none"; return; }
@@ -303,11 +312,6 @@ document.getElementById("btn-share-public").addEventListener("click", () => {
   box.style.display = "block";
 });
 
-/* ---------- auto-actualización ----------
-   Cada 25s se refresca solo si no hay una edición o un selector de color
-   abiertos en ese momento (para no pisarle al profesor algo que está
-   escribiendo). Así, si un alumno rinde un parcialito nuevo mientras el
-   profesor tiene esta pantalla abierta, aparece solo. */
 setInterval(() => { if (editingInProgress === 0) load(true); }, 25000);
 
 load();
