@@ -600,3 +600,11 @@ table.results-table th.sortable .sort-arrow{ opacity:.55; margin-left:3px; }
 .faltas-pill.level-1{ background: var(--violet-soft); color: var(--violet-strong); }
 .faltas-pill.level-2{ background: var(--violet); color: #fff; }
 .faltas-pill.level-3{ background: var(--violet-strong); color: #fff; }
+
+/* ---------- pastillas del buscador de N° de alumno: condición y N° faltante ---------- */
+.tag-pill{ font-family: var(--font-mono); font-weight:700; padding:3px 10px; border-radius: var(--radius-pill); font-size:12px; display:inline-block; }
+.tag-pill.primer{ background: var(--blue-soft); color: var(--blue-strong); }
+.tag-pill.recursante{ background: var(--accent-soft); color: var(--accent-strong); }
+.tag-pill.low{ background: var(--accent-soft); color: var(--accent-strong); }
+.input-comision{ width:100%; padding:6px 8px; border:1.5px solid var(--line-strong); border-radius: var(--radius-sm); font-family: var(--font-body); font-size:13px; }
+.input-comision:focus{ outline:none; border-color: var(--blue); }
