@@ -128,19 +128,23 @@ function getFormById_(formId) {
 
 function saveForm_(form) {
   if (!form || !form.id) return { ok: false, error: "Formulario inválido" };
+  const json = JSON.stringify(form);
+  if (json.length > 49500) {
+    return { ok: false, error: "El parcialito quedó demasiado pesado para guardarse (por lo general es por una o varias imágenes). Sacá alguna imagen o probá con una más simple/recortada." };
+  }
   const sheet = getFormulariosSheet_();
   const rows = sheet.getDataRange().getValues();
   const now = new Date().toISOString();
   form.updatedAt = now;
   for (let i = 1; i < rows.length; i++) {
     if (String(rows[i][0]) === String(form.id)) {
-      sheet.getRange(i + 1, 2).setValue(JSON.stringify(form));
+      sheet.getRange(i + 1, 2).setValue(json);
       sheet.getRange(i + 1, 4).setValue(now);
       return { ok: true };
     }
   }
   form.createdAt = form.createdAt || now;
-  sheet.appendRow([form.id, JSON.stringify(form), form.createdAt, now]);
+  sheet.appendRow([form.id, json, form.createdAt, now]);
   return { ok: true };
 }
 
