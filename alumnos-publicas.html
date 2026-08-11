@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Buscá tu número de alumno</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<div class="titleblock">
+  <div class="titleblock__main">
+    <p class="titleblock__eyebrow">Buscador</p>
+    <h1 class="titleblock__title">Buscá tu Número de Alumno</h1>
+  </div>
+  <div class="titleblock__meta">
+    <div><b id="tb-count">0</b>alumnos</div>
+    <div><span>Si tu número figura mal o no aparece, avisale al profe</span></div>
+  </div>
+</div>
+
+<div class="app">
+  <div class="results-toolbar">
+    <select id="filter-carrera"><option value="">Todas las carreras</option></select>
+    <select id="filter-comision"><option value="">Todas las comisiones</option></select>
+    <input type="text" id="filter-texto" placeholder="Buscate por apellido, nombre o N° de alumno…">
+  </div>
+  <div id="alumnos-container"><p class="empty-note">Cargando…</p></div>
+</div>
+
+<script src="assets/common.js"></script>
+<script src="assets/alumnos-publicas.js"></script>
+</body>
+</html>

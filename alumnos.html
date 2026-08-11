@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Números de alumno</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<div class="titleblock">
+  <div class="titleblock__main">
+    <p class="titleblock__eyebrow"><a href="index.html" style="color:var(--blue); text-decoration:none;">← Mis parcialitos</a></p>
+    <h1 class="titleblock__title">Números de alumno</h1>
+  </div>
+  <div class="titleblock__meta">
+    <div><b id="tb-count">0</b>alumnos</div>
+    <div><span>Sincronizado en vivo con el formulario de inscripción</span></div>
+  </div>
+</div>
+
+<div class="app">
+
+  <!-- ============ CONFIGURACIÓN DE LA PLANILLA DE INSCRIPCIÓN ============ -->
+  <div id="config-view" style="display:none;">
+    <div class="export-card">
+      <h3>Conectá el formulario de inscripción</h3>
+      <p style="font-size:13px; color:var(--muted);">
+        Esta sección lee, en el momento, la planilla de respuestas de tu
+        Google Form de inscripción — no se copia nada acá. Si más adelante
+        corregís un N° de alumno directamente en esa planilla, se va a ver
+        actualizado enseguida, sin que tengas que hacer nada en este sitio.
+      </p>
+      <p style="font-size:13px; color:var(--muted);">
+        <b>Cómo conseguir el ID:</b> abrí la planilla de respuestas del
+        formulario (Google Sheets), mirá la URL — es la parte entre
+        <code>/d/</code> y <code>/edit</code>:<br>
+        <code>docs.google.com/spreadsheets/d/<b>ESTE-ES-EL-ID</b>/edit</code><br>
+        Tiene que estar compartida (aunque sea como lector) con la misma
+        cuenta de Google con la que implementaste el Apps Script.
+      </p>
+      <label class="field-label">ID de la planilla de respuestas</label>
+      <input type="text" id="config-sheet-id" placeholder="Ej: 1AbCdEfGhIjKlMnOpQrStUvWxYz...">
+      <label class="field-label">Nombre de la pestaña (opcional — si no la sabés, dejalo vacío y se usa la primera)</label>
+      <input type="text" id="config-tab-name" placeholder='Ej: "Respuestas de formulario 1"'>
+      <button class="btn btn-primary" id="btn-save-config" style="margin-top:12px;">Conectar y continuar</button>
+      <p id="config-error" class="warn-banner" style="display:none; margin-top:12px;"></p>
+    </div>
+  </div>
+
+  <!-- ============ TABLA DE ALUMNOS ============ -->
+  <div id="alumnos-view" style="display:none;">
+    <div class="results-toolbar">
+      <select id="filter-carrera"><option value="">Todas las carreras</option></select>
+      <select id="filter-comision"><option value="">Todas las comisiones</option></select>
+      <select id="filter-condicion"><option value="">1er. Año y Recursantes</option></select>
+      <input type="text" id="filter-texto" placeholder="Buscar por apellido, nombre o N° de alumno…">
+      <button class="btn" id="btn-refresh">↻ Actualizar</button>
+      <button class="btn btn-accent" id="btn-share-public">🔗 Compartir con alumnos</button>
+      <button class="btn btn-ghost" id="btn-change-config">⚙ Cambiar planilla</button>
+    </div>
+    <div id="public-share-card" style="display:none;"></div>
+    <p class="hint" style="font-size:12px; color:var(--muted); margin:-6px 0 14px;">
+      La Comisión se completa sola con la que el alumno eligió al rendir su primer parcialito (marcada como <b>✓ auto</b>). Para los que todavía no rindieron nada, podés asignarla vos acá a mano — en cuanto rindan su primer parcialito, se va a reemplazar sola por la real.
+    </p>
+    <div id="alumnos-container"><p class="empty-note">Cargando…</p></div>
+  </div>
+
+</div>
+
+<script src="assets/common.js"></script>
+<script src="assets/alumnos.js"></script>
+</body>
+</html>
