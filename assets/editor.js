@@ -235,7 +235,7 @@ function renderSectionCard(section, sIdx) {
 
 function makeBlankQuestion(type) {
   const base = { id: uid("q"), type, points: 1, required: true, label: "" };
-  if (type === "short_text") return { ...base, acceptedAnswers: [], caseInsensitive: true };
+  if (type === "short_text") return { ...base, acceptedAnswers: [], caseInsensitive: true, matchMode: "exact", keywords: [], minKeywordMatches: null };
   if (type === "number") return { ...base, acceptedAnswers: [] };
   if (type === "multiple_choice") return { ...base, options: [{ id: uid("o"), text: "" }, { id: uid("o"), text: "" }], multiSelect: false, correctOptionId: null, correctOptionIds: [], optionPoints: {}, requiredSelectionCount: null };
   if (type === "true_false") {
@@ -338,6 +338,29 @@ function renderQuestionBlock(section, q, qIdx) {
   body.appendChild(imgField);
 
   if (q.type === "short_text" || q.type === "number") {
+    if (q.type === "short_text") {
+      const modeField = document.createElement("div");
+      modeField.innerHTML = `<label class="field-label">¿Cómo se corrige esta respuesta?</label>`;
+      const modeRow = document.createElement("div");
+      modeRow.className = "checkrow";
+      modeRow.style.gap = "18px"; modeRow.style.flexWrap = "wrap";
+      const mkRadio = (value, labelText) => {
+        const wrap = document.createElement("label");
+        wrap.style.display = "inline-flex"; wrap.style.alignItems = "center"; wrap.style.gap = "6px"; wrap.style.fontWeight = "normal"; wrap.style.cursor = "pointer";
+        const r = document.createElement("input");
+        r.type = "radio"; r.name = "matchMode_" + q.id; r.value = value;
+        r.checked = (q.matchMode || "exact") === value;
+        r.addEventListener("change", () => { if (r.checked) { q.matchMode = value; persist(); renderBuilder(); } });
+        wrap.appendChild(r); wrap.appendChild(document.createTextNode(" " + labelText));
+        return wrap;
+      };
+      modeRow.appendChild(mkRadio("exact", "Coincidencia exacta con alguna respuesta aceptada"));
+      modeRow.appendChild(mkRadio("keywords", "Por palabras clave (cuenta como correcta a partir de una cantidad mínima)"));
+      modeField.appendChild(modeRow);
+      body.appendChild(modeField);
+    }
+
+    if (q.type === "number" || (q.matchMode || "exact") === "exact") {
     const accField = document.createElement("div");
     accField.innerHTML = `<label class="field-label">${q.type === "number" ? "Valores numéricos aceptados" : "Respuestas aceptadas (cualquiera cuenta como correcta)"}</label>`;
     const tagInput = document.createElement("div");
@@ -362,6 +385,61 @@ function renderQuestionBlock(section, q, qIdx) {
     tagInput.appendChild(newTagInp);
     accField.appendChild(tagInput);
     body.appendChild(accField);
+    }
+
+    if (q.type === "short_text" && (q.matchMode || "exact") === "keywords") {
+      const kwField = document.createElement("div");
+      kwField.innerHTML = `<label class="field-label">Palabras clave (cualquier combinación de ellas puede aparecer en el texto del alumno)</label>`;
+      const kwTagInput = document.createElement("div");
+      kwTagInput.className = "tag-input";
+      (q.keywords || []).forEach((kw, kIdx) => {
+        const tag = document.createElement("span");
+        tag.className = "tag"; tag.innerHTML = `<span>${escapeHtml(kw)}</span>`;
+        const rm = document.createElement("button"); rm.textContent = "×";
+        rm.addEventListener("click", () => {
+          q.keywords.splice(kIdx, 1);
+          if (q.minKeywordMatches != null && Number(q.minKeywordMatches) > q.keywords.length) q.minKeywordMatches = q.keywords.length || null;
+          persist(); renderBuilder();
+        });
+        tag.appendChild(rm); kwTagInput.appendChild(tag);
+      });
+      const newKwInp = document.createElement("input");
+      newKwInp.type = "text"; newKwInp.placeholder = "Escribí una palabra o frase clave y Enter";
+      newKwInp.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && newKwInp.value.trim()) {
+          e.preventDefault();
+          q.keywords = q.keywords || [];
+          q.keywords.push(newKwInp.value.trim());
+          persist(); renderBuilder();
+        }
+      });
+      kwTagInput.appendChild(newKwInp);
+      kwField.appendChild(kwTagInput);
+      body.appendChild(kwField);
+
+      const totalKw = (q.keywords || []).length;
+      const minField = document.createElement("div");
+      minField.style.marginTop = "10px";
+      minField.innerHTML = `<label class="field-label">Cantidad mínima de palabras que tienen que aparecer para contar como correcta (de ${totalKw} cargadas)</label>`;
+      const minInp = document.createElement("input");
+      minInp.type = "number"; minInp.min = "1"; minInp.max = String(totalKw || 1); minInp.style.maxWidth = "120px";
+      minInp.value = q.minKeywordMatches != null ? q.minKeywordMatches : (totalKw || "");
+      minInp.disabled = totalKw === 0;
+      minInp.addEventListener("change", () => {
+        let v = Number(minInp.value) || 1;
+        v = Math.max(1, Math.min(v, totalKw || 1));
+        q.minKeywordMatches = v;
+        persist(); renderBuilder();
+      });
+      minField.appendChild(minInp);
+      if (totalKw === 0) {
+        const hint = document.createElement("span");
+        hint.style.cssText = "font-size:12px; color:var(--muted); margin-left:8px;";
+        hint.textContent = "Cargá primero al menos una palabra clave.";
+        minField.appendChild(hint);
+      }
+      body.appendChild(minField);
+    }
 
     if (q.type === "short_text") {
       const chk = document.createElement("div"); chk.className = "checkrow";
