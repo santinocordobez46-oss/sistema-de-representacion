@@ -27,6 +27,8 @@
 
 const SHEET_RESPUESTAS = "Respuestas";
 const SHEET_FORMULARIOS = "Formularios";
+const SHEET_ALUMNOS_CONFIG = "ConfigAlumnos";
+const SHEET_COMISIONES_ALUMNOS = "ComisionesAlumnos";
 
 function normNum_(v) {
   const s = String(v == null ? "" : v).trim();
@@ -72,6 +74,8 @@ function doGet(e) {
   if (action === "listforms") return jsonOut_(listForms_());
   if (action === "getform") return jsonOut_(getFormById_(e.parameter.formId));
   if (action === "lookupstudent") return jsonOut_(lookupStudent_(e.parameter.numeroAlumno, e.parameter.nombre, e.parameter.mail));
+  if (action === "listalumnos") return jsonOut_(listAlumnos_());
+  if (action === "getalumnosconfig") return jsonOut_({ ok: true, config: getAlumnosConfig_() });
   return jsonOut_({ ok: false, error: "Acción no reconocida" });
 }
 
@@ -87,6 +91,8 @@ function doPost(e) {
     if (data.action === "updateresponse") return jsonOut_(updateResponseStudent_(data.formId, data.numeroAlumnoOriginal, data.numeroAlumnoNuevo, data.nombreNuevo));
     if (data.action === "setresponsecolor") return jsonOut_(setResponseColor_(data.formId, data.numeroAlumno, data.color));
     if (data.action === "updatestudentinfo") return jsonOut_(updateStudentInfo_(data.numeroAlumnoOriginal, data.numeroAlumnoNuevo, data.nombreNuevo, data.mailNuevo));
+    if (data.action === "setalumnosconfig") return jsonOut_(setAlumnosConfig_(data.sheetId, data.tabName));
+    if (data.action === "setcomisionalumno") return jsonOut_(setComisionAlumno_(data.numeroAlumno, data.comision));
     return jsonOut_({ ok: false, error: "Acción no reconocida" });
   } catch (err) {
     return jsonOut_({ ok: false, error: String(err) });
@@ -477,3 +483,208 @@ function sortByNumero_(arr) {
 
 function safeParse_(s) { try { return JSON.parse(s); } catch (e) { return []; } }
 function jsonOut_(obj) { return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON); }
+
+/* ================================================================
+   ALUMNOS — buscador de N° de alumno, sincronizado EN VIVO con la
+   planilla de respuestas del formulario de inscripción del profe
+   (un Google Form aparte, no esta planilla).
+   ================================================================
+
+   No se copian ni guardan datos de esa otra planilla acá: cada vez
+   que alguien pide la lista, este backend la abre y la lee en ese
+   mismo momento. Si el profe corrige un N° de alumno directamente
+   en las respuestas del formulario de inscripción, en la próxima
+   consulta ya aparece corregido — no hace falta ningún paso manual.
+
+   Lo único que SÍ vive en esta planilla (porque el formulario de
+   inscripción no lo pregunta) es la Comisión de cada alumno: se
+   guarda en la pestaña "ComisionesAlumnos" y se combina con los
+   datos en vivo al armar la respuesta. */
+
+function getAlumnosConfigSheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(SHEET_ALUMNOS_CONFIG);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_ALUMNOS_CONFIG);
+    sheet.appendRow(["Clave", "Valor"]);
+    sheet.appendRow(["sheetId", ""]);
+    sheet.appendRow(["tabName", ""]);
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+function getAlumnosConfig_() {
+  const sheet = getAlumnosConfigSheet_();
+  const rows = sheet.getDataRange().getValues();
+  const config = { sheetId: "", tabName: "" };
+  for (let i = 1; i < rows.length; i++) {
+    if (rows[i][0] === "sheetId") config.sheetId = rows[i][1] || "";
+    if (rows[i][0] === "tabName") config.tabName = rows[i][1] || "";
+  }
+  return config;
+}
+
+function setAlumnosConfig_(sheetId, tabName) {
+  if (!sheetId) return { ok: false, error: "Falta el ID de la planilla." };
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(10000); } catch (e) { return { ok: false, error: "Ocupado, probá de nuevo en unos segundos." }; }
+  try {
+    // Prueba que se puede abrir antes de guardar, para no guardar un ID roto.
+    try {
+      const testSs = SpreadsheetApp.openById(sheetId);
+      if (tabName && !testSs.getSheetByName(tabName)) {
+        return { ok: false, error: 'Se pudo abrir la planilla, pero no existe una pestaña llamada "' + tabName + '".' };
+      }
+    } catch (e) {
+      return { ok: false, error: "No se pudo abrir esa planilla. Revisá el ID y que esté compartida con la misma cuenta de Google que ejecuta este Apps Script (mínimo como lector)." };
+    }
+    const sheet = getAlumnosConfigSheet_();
+    const rows = sheet.getDataRange().getValues();
+    let foundSheetId = false, foundTabName = false;
+    for (let i = 1; i < rows.length; i++) {
+      if (rows[i][0] === "sheetId") { sheet.getRange(i + 1, 2).setValue(sheetId); foundSheetId = true; }
+      if (rows[i][0] === "tabName") { sheet.getRange(i + 1, 2).setValue(tabName || ""); foundTabName = true; }
+    }
+    if (!foundSheetId) sheet.appendRow(["sheetId", sheetId]);
+    if (!foundTabName) sheet.appendRow(["tabName", tabName || ""]);
+    return { ok: true };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function getComisionesAlumnosSheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(SHEET_COMISIONES_ALUMNOS);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_COMISIONES_ALUMNOS);
+    sheet.appendRow(["N° Alumno", "Comisión"]);
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
+function getComisionesMap_() {
+  const sheet = getComisionesAlumnosSheet_();
+  const rows = sheet.getDataRange().getValues();
+  const map = {};
+  for (let i = 1; i < rows.length; i++) {
+    const nro = normNum_(rows[i][0]);
+    if (nro) map[nro] = rows[i][1] || "";
+  }
+  return map;
+}
+
+/* Comisión real, tomada de las respuestas ya enviadas por los alumnos al
+   rendir un parcialito (columna "Comisión" de la hoja "Respuestas") — el
+   alumno la elige él mismo al empezar, así que es más confiable que una
+   asignación manual. Si un alumno rindió más de un parcialito y en algún
+   momento cambió de comisión, se queda con la ÚLTIMA que usó (recorre
+   de abajo hacia arriba y para en la primera que encuentra). */
+function getComisionesDesdeRespuestas_() {
+  const sheet = getRespuestasSheet_();
+  const rows = sheet.getDataRange().getValues();
+  const map = {};
+  for (let i = rows.length - 1; i >= 1; i--) {
+    const nro = normNum_(rows[i][3]);
+    const comision = String(rows[i][2] || "").trim();
+    if (nro && comision && !map[nro]) map[nro] = comision;
+  }
+  return map;
+}
+
+function setComisionAlumno_(numeroAlumno, comision) {
+  if (!numeroAlumno) return { ok: false, error: "Falta el N° de alumno." };
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(10000); } catch (e) { return { ok: false, error: "Ocupado, probá de nuevo en unos segundos." }; }
+  try {
+    const sheet = getComisionesAlumnosSheet_();
+    const rows = sheet.getDataRange().getValues();
+    const numNorm = normNum_(numeroAlumno);
+    for (let i = 1; i < rows.length; i++) {
+      if (normNum_(rows[i][0]) === numNorm) {
+        sheet.getRange(i + 1, 2).setValue(comision || "");
+        return { ok: true };
+      }
+    }
+    sheet.appendRow([numeroAlumno, comision || ""]);
+    return { ok: true };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/* Busca en la primera fila (encabezados) de la planilla externa a qué
+   columna corresponde cada dato, por palabras clave — así no depende de
+   que la columna esté siempre en la misma letra, solo de que el título
+   de la pregunta en el Google Form la mencione. */
+function detectarColumnasAlumnos_(headerRow) {
+  const header = headerRow.map((h) => normText_(h));
+  const find = (mustInclude, mustExclude) => {
+    for (let i = 0; i < header.length; i++) {
+      const h = header[i];
+      const okInclude = mustInclude.every((w) => h.indexOf(w) !== -1);
+      const okExclude = !mustExclude || mustExclude.every((w) => h.indexOf(w) === -1);
+      if (okInclude && okExclude) return i;
+    }
+    return -1;
+  };
+  return {
+    numero: find(["alumno"], ["carrera"]),
+    apellido: find(["apellido"]),
+    nombres: find(["nombre"], ["apellido"]),
+    condicion: find(["estado"]),
+    carrera: find(["carrera"]),
+  };
+}
+
+function listAlumnos_() {
+  const config = getAlumnosConfig_();
+  if (!config.sheetId) {
+    return { ok: false, needsConfig: true, error: "Todavía no está configurada la planilla de inscripción." };
+  }
+  let ss;
+  try {
+    ss = SpreadsheetApp.openById(config.sheetId);
+  } catch (e) {
+    return { ok: false, needsConfig: true, error: "No se pudo abrir la planilla configurada. Revisá el ID y que esté compartida con la cuenta que ejecuta el Apps Script." };
+  }
+  const sheet = config.tabName ? ss.getSheetByName(config.tabName) : ss.getSheets()[0];
+  if (!sheet) {
+    return { ok: false, needsConfig: true, error: 'No se encontró la pestaña "' + config.tabName + '" en esa planilla.' };
+  }
+  const rows = sheet.getDataRange().getValues();
+  if (rows.length < 2) return { ok: true, alumnos: [] };
+
+  const idx = detectarColumnasAlumnos_(rows[0]);
+  if (idx.apellido === -1 && idx.nombres === -1) {
+    return { ok: false, needsConfig: true, error: "No se encontraron columnas de Apellido/Nombres en esa pestaña. Revisá el nombre de la pestaña configurada." };
+  }
+
+  const comisionesManual = getComisionesMap_();
+  const comisionesReales = getComisionesDesdeRespuestas_();
+  const out = [];
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    const numero = idx.numero !== -1 ? String(row[idx.numero] || "").trim() : "";
+    const apellido = idx.apellido !== -1 ? String(row[idx.apellido] || "").trim() : "";
+    const nombres = idx.nombres !== -1 ? String(row[idx.nombres] || "").trim() : "";
+    const condicion = idx.condicion !== -1 ? String(row[idx.condicion] || "").trim() : "";
+    const carrera = idx.carrera !== -1 ? String(row[idx.carrera] || "").trim() : "";
+    if (!apellido && !nombres) continue;
+    const numeroFinal = numero || "000";
+    const numNorm = normNum_(numeroFinal);
+    // Prioridad: la comisión con la que el alumno ya rindió un parcialito
+    // (la eligió él mismo, es un dato real) manda sobre la asignación manual.
+    // Si todavía no rindió nada, se usa la manual (si el profe cargó una).
+    const comisionReal = comisionesReales[numNorm];
+    out.push({
+      numeroAlumno: numeroFinal,
+      apellido, nombres, condicion, carrera,
+      comision: comisionReal || comisionesManual[numNorm] || "",
+      comisionOrigen: comisionReal ? "parcialito" : (comisionesManual[numNorm] ? "manual" : ""),
+    });
+  }
+  return { ok: true, alumnos: out };
+}
