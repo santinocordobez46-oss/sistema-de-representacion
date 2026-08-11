@@ -525,8 +525,15 @@ function getAlumnosConfig_() {
   return config;
 }
 
+function extraerSheetId_(input) {
+  const s = String(input || "").trim();
+  const m = s.match(/\/d\/([a-zA-Z0-9_-]+)/);
+  return m ? m[1] : s;
+}
+
 function setAlumnosConfig_(sheetId, tabName) {
   if (!sheetId) return { ok: false, error: "Falta el ID de la planilla." };
+  sheetId = extraerSheetId_(sheetId);
   const lock = LockService.getScriptLock();
   try { lock.waitLock(10000); } catch (e) { return { ok: false, error: "Ocupado, probá de nuevo en unos segundos." }; }
   try {
