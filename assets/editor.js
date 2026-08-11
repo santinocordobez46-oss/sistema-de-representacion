@@ -11,6 +11,49 @@ let saveTimer = null;
 
 const statusEl = document.getElementById("save-status");
 
+/* ---------- compresión de imágenes ----------
+   Google Sheets guarda el parcialito ENTERO (preguntas + imágenes en base64)
+   en una sola celda, que tiene un límite duro de 50.000 caracteres. Una foto
+   de celular sin comprimir lo supera fácil y el guardado falla en silencio.
+   Por eso, antes de guardar cualquier imagen, se la redibuja más chica y con
+   menos calidad hasta que entre cómoda dentro del límite. */
+const IMAGE_MAX_CHARS = 28000; // deja margen para el resto de las preguntas del mismo parcialito
+function comprimirImagen(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("No se pudo leer el archivo."));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("El archivo no es una imagen válida."));
+      img.onload = () => {
+        let width = img.naturalWidth, height = img.naturalHeight;
+        const anchosAProbar = [1000, 800, 600, 450, 320];
+        const calidadesAProbar = [0.75, 0.6, 0.45, 0.3];
+        let resultado = null;
+        for (const maxAncho of anchosAProbar) {
+          const escala = Math.min(1, maxAncho / width);
+          const w = Math.max(1, Math.round(width * escala));
+          const h = Math.max(1, Math.round(height * escala));
+          const canvas = document.createElement("canvas");
+          canvas.width = w; canvas.height = h;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0, w, h);
+          for (const calidad of calidadesAProbar) {
+            const dataUrl = canvas.toDataURL("image/jpeg", calidad);
+            if (dataUrl.length <= IMAGE_MAX_CHARS) { resultado = dataUrl; break; }
+            if (!resultado || dataUrl.length < resultado.length) resultado = dataUrl; // guarda la más chica lograda por si ninguna entra
+          }
+          if (resultado && resultado.length <= IMAGE_MAX_CHARS) break;
+        }
+        if (!resultado) return reject(new Error("No se pudo procesar la imagen."));
+        resolve({ dataUrl: resultado, entraEnLimite: resultado.length <= IMAGE_MAX_CHARS });
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 /* ---------- barra de formato B / I / U para textareas ----------
    Envuelve el texto seleccionado (o inserta un placeholder) con marcadores
    **negrita** / *cursiva* / __subrayado__, que después renderiza formatRichText(). */
@@ -63,10 +106,21 @@ async function boot() {
 function persist() {
   syncTitleblock();
   statusEl.textContent = "Guardando…";
+  statusEl.style.color = "";
   clearTimeout(saveTimer);
   saveTimer = setTimeout(async () => {
-    try { await apiSaveForm(form); statusEl.textContent = "Guardado ✓"; }
-    catch (e) { statusEl.textContent = "Error al guardar"; }
+    try {
+      const res = await apiSaveForm(form);
+      if (res && res.ok === false) {
+        statusEl.textContent = "⚠ No se guardó: " + (res.error || "error desconocido");
+        statusEl.style.color = "var(--accent-strong)";
+        return;
+      }
+      statusEl.textContent = "Guardado ✓";
+    } catch (e) {
+      statusEl.textContent = "⚠ Error al guardar (revisá tu conexión)";
+      statusEl.style.color = "var(--accent-strong)";
+    }
   }, 600);
 }
 
@@ -325,11 +379,21 @@ function renderQuestionBlock(section, q, qIdx) {
   } else {
     const fileInp = document.createElement("input");
     fileInp.type = "file"; fileInp.accept = "image/*";
-    fileInp.addEventListener("change", () => {
+    fileInp.addEventListener("change", async () => {
       const file = fileInp.files[0]; if (!file) return;
-      const reader = new FileReader();
-      reader.onload = () => { q.image = reader.result; persist(); renderBuilder(); };
-      reader.readAsDataURL(file);
+      dropBox.innerHTML = `<span>Comprimiendo imagen…</span>`;
+      try {
+        const { dataUrl, entraEnLimite } = await comprimirImagen(file);
+        q.image = dataUrl;
+        persist();
+        renderBuilder();
+        if (!entraEnLimite) {
+          setTimeout(() => alert("La imagen se comprimió al máximo posible pero sigue siendo grande. Puede que no llegue a guardarse junto con el resto de las preguntas — si ves un error al guardar, probá con una imagen más simple o recortada."), 50);
+        }
+      } catch (err) {
+        dropBox.innerHTML = `<span>Subí una imagen (tabla, gráfico, plano, etc.)</span>`;
+        alert("No se pudo procesar la imagen: " + err.message);
+      }
     });
     dropBox.innerHTML = `<span>Subí una imagen (tabla, gráfico, plano, etc.)</span>`;
     dropBox.appendChild(fileInp);
