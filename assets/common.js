@@ -91,6 +91,16 @@ function normalizeNumber(s) {
    pregunta de "marcar varias" queda en todo-o-nada por defecto. */
 function scoreQuestionAnswer(q, given) {
   if (q.type === "short_text") {
+    if (q.matchMode === "keywords" && (q.keywords || []).length) {
+      const givenNorm = normalizeText(given);
+      const matches = (q.keywords || []).filter((k) => k && givenNorm.includes(normalizeText(k))).length;
+      const totalKeywords = (q.keywords || []).length;
+      const minRequired = q.minKeywordMatches != null && q.minKeywordMatches !== ""
+        ? Math.min(Number(q.minKeywordMatches) || totalKeywords, totalKeywords)
+        : totalKeywords;
+      const correct = matches >= minRequired;
+      return { correct, puntos: correct ? (Number(q.points) || 0) : 0 };
+    }
     const correct = (q.acceptedAnswers || []).some((a) => normalizeText(a) === normalizeText(given));
     return { correct, puntos: correct ? (Number(q.points) || 0) : 0 };
   }
