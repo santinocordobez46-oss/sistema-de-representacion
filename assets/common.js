@@ -48,6 +48,13 @@ async function apiUpdateStudentInfo(numeroAlumnoOriginal, numeroAlumnoNuevo, nom
   return apiPost({ action: "updatestudentinfo", numeroAlumnoOriginal, numeroAlumnoNuevo, nombreNuevo, mailNuevo });
 }
 
+/* ---------- buscador de N° de alumno (roster sincronizado en vivo) ---------- */
+async function apiListAlumnos() { return apiGet("listalumnos"); }
+async function apiGetAlumnosConfig() { return apiGet("getalumnosconfig"); }
+async function apiSetAlumnosConfig(sheetId, tabName) { return apiPost({ action: "setalumnosconfig", sheetId, tabName }); }
+async function apiSetComisionAlumno(numeroAlumno, comision) { return apiPost({ action: "setcomisionalumno", numeroAlumno, comision }); }
+async function apiListAlumnosPublic(apiUrl) { return apiGetExplicit(apiUrl, "listalumnos"); }
+
 /* ---------- variante para páginas públicas (sin login del profesor) ----------
    Las mismas llamadas GET de arriba, pero con la URL de la API pasada
    explícitamente (viene de la URL del link/QR, ?api=...) en vez de leerla
