@@ -132,7 +132,57 @@ function scoreQuestionAnswer(q, given) {
     const correct = given === q.correctOptionId;
     return { correct, puntos: correct ? (Number(q.points) || 0) : 0 };
   }
+  if (q.type === "fill_blank") {
+    const blanks = q.blanks || [];
+    const givenArr = Array.isArray(given) ? given : [];
+    let puntos = 0;
+    let allCorrect = blanks.length > 0;
+    blanks.forEach((b, i) => {
+      const givenVal = givenArr[i] != null ? givenArr[i] : "";
+      const esCorrecta = (b.acceptedAnswers || []).some((a) => normalizeText(a) === normalizeText(givenVal));
+      if (esCorrecta) puntos += Number(b.points) || 0;
+      else allCorrect = false;
+    });
+    puntos = Math.round(puntos * 100) / 100;
+    return { correct: allCorrect, puntos };
+  }
   return { correct: false, puntos: 0 };
+}
+
+/* ---------- "Duplicar Palabras Claves" — frase con casilleros numerados ----------
+   El profesor escribe la frase entera y marca cada espacio en blanco con un
+   marcador {n} en el punto exacto donde va (se inserta solo con el botón
+   "+ Casillero" del editor, nunca a mano). parseFillBlankLabel() separa la
+   frase en pedazos de texto y casilleros, en el orden en que aparecen, para
+   poder dibujar un <input> metido justo en ese lugar (tanto en el examen real
+   como en la vista previa del editor). maxBlankNumber() dice qué número le
+   toca al próximo casillero que se agregue. syncBlanksWithLabel() mantiene la
+   lista de casilleros (con sus respuestas aceptadas y puntaje) del mismo
+   largo que la cantidad de marcadores que hay ahora en el texto — si el
+   profesor borra un marcador de la frase, se borra también su casillero de
+   abajo; si agrega uno nuevo, aparece un casillero nuevo vacío. */
+function parseFillBlankLabel(label) {
+  const parts = [];
+  const regex = /\{(\d+)\}/g;
+  const raw = String(label || "");
+  let lastIndex = 0, match;
+  while ((match = regex.exec(raw)) !== null) {
+    if (match.index > lastIndex) parts.push({ type: "text", value: raw.slice(lastIndex, match.index) });
+    parts.push({ type: "blank", n: parseInt(match[1], 10) });
+    lastIndex = regex.lastIndex;
+  }
+  if (lastIndex < raw.length) parts.push({ type: "text", value: raw.slice(lastIndex) });
+  return parts;
+}
+function maxBlankNumber(label) {
+  const nums = Array.from(String(label || "").matchAll(/\{(\d+)\}/g)).map((m) => parseInt(m[1], 10));
+  return nums.length ? Math.max(...nums) : 0;
+}
+function syncBlanksWithLabel(q) {
+  const maxN = maxBlankNumber(q.label);
+  q.blanks = q.blanks || [];
+  while (q.blanks.length < maxN) q.blanks.push({ id: uid("blank"), acceptedAnswers: [], points: 1 });
+  while (q.blanks.length > maxN) q.blanks.pop();
 }
 
 /* ---------- ordenamiento compartido: primero por comisión, después por N° de alumno ---------- */
@@ -348,14 +398,26 @@ function resolveNota(row) {
   return scoreToNota(row ? row.score : 0, row ? row.totalPoints : 0);
 }
 function formatResolvedNota(row) {
+  if (isAttendanceOnly(row)) return "";
   return formatNotaValue(resolveNota(row));
 }
 
-/* Decide qué clase de color usar para el "score-pill" de una nota: si el
-   profesor la forzó a mano (colorManual: "verde"/"rojo"), se respeta esa
-   decisión pase lo que pase con el puntaje. Si no, se calcula solo con el
-   60% de siempre. */
+/* ---------- "Confirmar asistencia" (el alumno escaneó, confirmó que está en
+   clase, pero eligió no rendir) ----------
+   Esa fila queda guardada en Respuestas sin puntaje/nota, marcada con
+   asistenciaSinRendir=1. En las tablas se ve como un casillero VACÍO pero
+   pintado de verde (asistió), distinto de una falta (ni siquiera escaneó) y
+   distinto de una nota real (aprobada o desaprobada). */
+function isAttendanceOnly(row) {
+  return !!(row && (row.asistenciaSinRendir === true || row.asistenciaSinRendir === 1 || row.asistenciaSinRendir === "1"));
+}
+
+/* Decide qué clase de color usar para el "score-pill" de una nota: si es
+   una asistencia sin rendir, siempre verde (vacío). Si el profesor la forzó
+   a mano (colorManual: "verde"/"rojo"), se respeta esa decisión pase lo que
+   pase con el puntaje. Si no, se calcula solo con el 60% de siempre. */
 function resolveColorClass(row) {
+  if (isAttendanceOnly(row)) return "high";
   if (row && row.colorManual === "verde") return "high";
   if (row && row.colorManual === "rojo") return "low";
   const pct = row && row.totalPoints > 0 ? (Number(row.score) || 0) / row.totalPoints : 0;
