@@ -66,6 +66,15 @@ function humanizeAnswer(q, rawRespuesta) {
 
 function buildScoreCell(r) {
   const td = document.createElement("td");
+
+  if (isAttendanceOnly(r)) {
+    const pill = document.createElement("span");
+    pill.className = "score-pill high";
+    pill.title = "Confirmó asistencia — no rindió este parcialito";
+    td.appendChild(pill);
+    return td;
+  }
+
   const pill = document.createElement("span");
   pill.className = `score-pill ${resolveColorClass(r)}`;
   pill.style.cursor = "pointer";
@@ -291,11 +300,13 @@ document.getElementById("btn-export-xlsx").addEventListener("click", (ev) => {
         return xlsxCell(`${humanizeAnswer(q, d.respuesta)} ${d.correcta ? "✓" : "✗"}${salida}`);
       });
       const aprobado = resolveColorClass(r) === "high";
+      const asistencia = isAttendanceOnly(r);
       aoa.push([
         xlsxCell(r.numeroAlumno), xlsxCell(r.nombre), xlsxCell(r.carrera || ""), xlsxCell(r.comision), xlsxCell(r.mail || ""),
         ...answerCells,
-        xlsxCell(r.score), xlsxCell(r.totalPoints),
-        xlsxCell(resolveNota(r), { style: xlsxNotaStyle(aprobado) }),
+        xlsxCell(asistencia ? "" : r.score, asistencia ? { style: xlsxNotaStyle(true) } : {}),
+        xlsxCell(asistencia ? "" : r.totalPoints, asistencia ? { style: xlsxNotaStyle(true) } : {}),
+        xlsxCell(asistencia ? "" : resolveNota(r), { style: xlsxNotaStyle(aprobado) }),
         xlsxCell(new Date(r.fecha).toLocaleString("es-AR")),
         xlsxCell(r.tabSwitches || 0, { style: xlsxTabSwitchStyle(r.tabSwitches) }),
       ]);
