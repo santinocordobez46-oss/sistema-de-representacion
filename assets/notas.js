@@ -35,6 +35,14 @@ function buildNotaCell(p, formId, numeroAlumno) {
   const td = document.createElement("td");
   if (!p) { td.style.color = "var(--muted)"; td.textContent = "—"; return td; }
 
+  if (isAttendanceOnly(p)) {
+    const pill = document.createElement("span");
+    pill.className = "score-pill high";
+    pill.title = "Confirmó asistencia — no rindió este parcialito";
+    td.appendChild(pill);
+    return td;
+  }
+
   const pill = document.createElement("span");
   pill.className = `score-pill ${resolveColorClass(p)}`;
   pill.style.cursor = "pointer";
@@ -225,7 +233,9 @@ document.getElementById("btn-export-xlsx").addEventListener("click", () => {
     const notaCells = forms.map((f) => {
       const p = s.parciales[f.id];
       if (!p) return xlsxCell("—");
-      sumScore += Number(p.score) || 0; sumMax += Number(p.totalPoints) || 0; sumTabSwitches += Number(p.tabSwitches) || 0; rendidos++;
+      rendidos++;
+      if (isAttendanceOnly(p)) return xlsxCell("", { style: xlsxNotaStyle(true) });
+      sumScore += Number(p.score) || 0; sumMax += Number(p.totalPoints) || 0; sumTabSwitches += Number(p.tabSwitches) || 0;
       return xlsxCell(resolveNota(p), { style: xlsxNotaStyle(resolveColorClass(p) === "high") });
     });
     const faltas = forms.length - rendidos;
