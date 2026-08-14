@@ -151,4 +151,4 @@ document.getElementById("btn-refresh").addEventListener("click", () => load(fals
 
 setInterval(() => load(true), 25000);
 
-load();
+load();}
