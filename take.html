@@ -263,6 +263,7 @@ function renderIdentity() {
 
     const extra = {};
     customInputs.forEach((ci) => { extra[ci.field.label || ci.field.id] = ci.getValue(); });
+    const identity = { nombre, numeroAlumno, comision, carrera, mail, extra };
 
     startBtn.disabled = true; startBtn.textContent = "Verificando…";
     try {
@@ -274,16 +275,35 @@ function renderIdentity() {
       const res = await fetch(url.toString());
       const data = await res.json();
       if (data.submitted) {
-        identityRoot.innerHTML = '<div class="warn-banner">Este número de alumno ya tiene una respuesta registrada para este parcialito en esta comisión. No se puede volver a rendir.</div>';
+        identityRoot.innerHTML = '<div class="warn-banner">Este número de alumno ya tiene una respuesta (o asistencia) registrada para este parcialito en esta comisión. No se puede volver a rendir.</div>';
         return;
       }
     } catch (e) {
       console.warn("No se pudo verificar reingreso, se continúa igual.", e);
     }
+
+    /* Apenas arranca — antes de mostrarle ninguna pregunta — queda
+       registrado que asistió (fila "asistencia sin rendir", sin nota). Si
+       más adelante entrega el parcial, esa misma fila se completa con su
+       puntaje y nota reales. Si se va sin terminar, queda tal cual: asistió,
+       no rindió — no hace falta que haga nada más ni que elija nada. */
+    try {
+      await fetch(takeApiUrl, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({
+          action: "confirmarasistencia", formId: form.id, formTitle: form.title,
+          comision, carrera, numeroAlumno, nombre, mail, extra,
+        }),
+      });
+    } catch (e) {
+      console.warn("No se pudo registrar la asistencia por separado — si entrega el parcial, va a quedar guardado igual con el envío final.", e);
+    }
+
     setupWatermark(nombre || numeroAlumno, numeroAlumno);
     identityRoot.style.display = "none";
     takeRoot.style.display = "block";
-    renderTake({ nombre, numeroAlumno, comision, carrera, mail, extra });
+    renderTake(identity);
   });
   card.appendChild(startBtn);
   identityRoot.appendChild(card);
@@ -352,7 +372,26 @@ function renderTake(identity) {
     const card = document.createElement("div");
     card.className = "take-question"; card.dataset.qid = q.id;
     const lbl = document.createElement("div");
-    lbl.className = "take-question__label"; lbl.innerHTML = formatRichText(escapeHtml(q.label || "(sin enunciado)"));
+    lbl.className = "take-question__label";
+    if (q.type === "fill_blank") {
+      answers[q.id] = answers[q.id] || [];
+      parseFillBlankLabel(q.label || "").forEach((part) => {
+        if (part.type === "text") {
+          const span = document.createElement("span");
+          span.innerHTML = formatRichText(escapeHtml(part.value));
+          lbl.appendChild(span);
+        } else {
+          const inp = document.createElement("input");
+          inp.type = "text";
+          inp.style.cssText = "display:inline-block; width:130px; margin:0 4px; padding:4px 6px; font-size:14px; border:1px solid var(--line-strong); border-radius:2px;";
+          inp.value = answers[q.id][part.n - 1] || "";
+          inp.addEventListener("input", () => { answers[q.id][part.n - 1] = inp.value; });
+          lbl.appendChild(inp);
+        }
+      });
+    } else {
+      lbl.innerHTML = formatRichText(escapeHtml(q.label || "(sin enunciado)"));
+    }
     card.appendChild(lbl);
     const pts = document.createElement("div");
     pts.className = "take-question__points"; pts.textContent = `Valor: ${q.points} punto(s)`;
@@ -366,6 +405,8 @@ function renderTake(identity) {
       inp.value = answers[q.id] || "";
       inp.addEventListener("input", () => { answers[q.id] = inp.value; });
       card.appendChild(inp);
+    } else if (q.type === "fill_blank") {
+      // los casilleros ya están dibujados adentro del enunciado, arriba
     } else if (q.multiSelect) {
       answers[q.id] = answers[q.id] || [];
       const limitMsg = document.createElement("div");
@@ -428,6 +469,18 @@ function renderTake(identity) {
 
   function validateCurrentQuestion(q) {
     const given = answers[q.id];
+    if (q.type === "fill_blank") {
+      if (q.required !== false) {
+        const blanksCount = (q.blanks || []).length;
+        for (let i = 0; i < blanksCount; i++) {
+          if (!given || !given[i] || !String(given[i]).trim()) {
+            alert("Completá todos los casilleros de esta pregunta antes de continuar.");
+            return false;
+          }
+        }
+      }
+      return true;
+    }
     if (q.multiSelect && q.requiredSelectionCount) {
       const count = (given || []).length;
       if (count !== q.requiredSelectionCount) {
@@ -444,6 +497,11 @@ function renderTake(identity) {
 
   function humanizeGivenAnswer(q, given) {
     if (given === undefined || given === null || given === "") return q.multiSelect ? "" : "";
+    if (q.type === "fill_blank") {
+      const blanks = q.blanks || [];
+      const arr = Array.isArray(given) ? given : [];
+      return blanks.map((b, i) => `Casillero ${i + 1}: ${arr[i] || "—"}`).join(" | ");
+    }
     if (q.type === "multiple_choice") {
       const optMap = {};
       (q.options || []).forEach((o) => { optMap[o.id] = o.text; });
