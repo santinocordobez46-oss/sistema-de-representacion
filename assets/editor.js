@@ -57,9 +57,9 @@ function comprimirImagen(file) {
 /* ---------- barra de formato B / I / U para textareas ----------
    Envuelve el texto seleccionado (o inserta un placeholder) con marcadores
    **negrita** / *cursiva* / __subrayado__, que después renderiza formatRichText(). */
-function createRichToolbar(getTextarea) {
+function createRichToolbar(getTextarea, opts) {
   const bar = document.createElement("div");
-  bar.style.cssText = "display:flex; gap:4px; margin-bottom:6px;";
+  bar.style.cssText = "display:flex; gap:4px; margin-bottom:6px; flex-wrap:wrap;";
   function addBtn(label, left, right, title, style) {
     const b = document.createElement("button");
     b.type = "button";
@@ -82,6 +82,31 @@ function createRichToolbar(getTextarea) {
   addBtn("B", "**", "**", "Negrita", "font-weight:700;");
   addBtn("I", "*", "*", "Cursiva / inclinada", "font-style:italic;");
   addBtn("U", "__", "__", "Subrayado", "text-decoration:underline;");
+
+  /* Botón especial para "Duplicar Palabras Claves": inserta un casillero
+     numerado en el punto exacto del cursor, sin que el profesor tenga que
+     escribir ninguna sintaxis a mano. */
+  if (opts && opts.insertBlank) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "btn btn-small btn-accent";
+    b.textContent = "+ Casillero";
+    b.title = "Insertar un espacio en blanco numerado en el punto del cursor";
+    b.addEventListener("click", (e) => {
+      e.preventDefault();
+      const ta = getTextarea();
+      const start = ta.selectionStart, end = ta.selectionEnd;
+      const before = ta.value.slice(0, start), after = ta.value.slice(end);
+      const nextN = opts.insertBlank.nextNumber();
+      const marker = `{${nextN}}`;
+      ta.value = before + marker + after;
+      const newPos = start + marker.length;
+      ta.focus(); ta.setSelectionRange(newPos, newPos);
+      ta.dispatchEvent(new Event("input"));
+      opts.insertBlank.onInsert();
+    });
+    bar.appendChild(b);
+  }
   return bar;
 }
 
@@ -217,6 +242,7 @@ const QUESTION_TYPES = [
   { value: "number", label: "Respuesta corta (número)" },
   { value: "multiple_choice", label: "Opción múltiple" },
   { value: "true_false", label: "Verdadero / Falso" },
+  { value: "fill_blank", label: "Duplicar Palabras Claves (frase con casilleros)" },
 ];
 
 function renderBuilder() {
@@ -296,6 +322,7 @@ function makeBlankQuestion(type) {
     const vOpt = { id: uid("o"), text: "Verdadero" }, fOpt = { id: uid("o"), text: "Falso" };
     return { ...base, type: "multiple_choice", options: [vOpt, fOpt], multiSelect: false, correctOptionId: null, correctOptionIds: [], optionPoints: {}, requiredSelectionCount: null };
   }
+  if (type === "fill_blank") return { ...base, blanks: [], caseInsensitive: true };
   return base;
 }
 
@@ -343,8 +370,8 @@ function renderQuestionBlock(section, q, qIdx) {
   stamp.className = "points-stamp"; stamp.innerHTML = `<span>PTS</span>`;
   const ptsInput = document.createElement("input");
   ptsInput.type = "number"; ptsInput.min = "0"; ptsInput.step = "0.5"; ptsInput.value = q.points;
-  ptsInput.disabled = q.type === "multiple_choice" && !!q.multiSelect;
-  ptsInput.title = ptsInput.disabled ? "Se calcula solo, sumando el puntaje de cada opción correcta" : "";
+  ptsInput.disabled = (q.type === "multiple_choice" && !!q.multiSelect) || q.type === "fill_blank";
+  ptsInput.title = ptsInput.disabled ? "Se calcula solo, sumando el puntaje de cada opción/palabra clave correcta" : "";
   ptsInput.addEventListener("input", () => { q.points = Number(ptsInput.value) || 0; persist(); });
   stamp.appendChild(ptsInput);
   head.appendChild(stamp);
@@ -358,7 +385,19 @@ function renderQuestionBlock(section, q, qIdx) {
   const labelTa = document.createElement("textarea");
   labelTa.value = q.label;
   labelTa.addEventListener("input", () => { q.label = labelTa.value; persist(); });
-  labelField.appendChild(createRichToolbar(() => labelTa));
+  if (q.type === "fill_blank") {
+    labelField.appendChild(createRichToolbar(() => labelTa, {
+      insertBlank: {
+        nextNumber: () => maxBlankNumber(q.label) + 1,
+        onInsert: () => { syncBlanksWithLabel(q); persist(); renderBuilder(); },
+      },
+    }));
+    // Si el profesor escribe o borra un {n} a mano y sale del campo, los
+    // casilleros de abajo se reacomodan solos para que coincidan siempre.
+    labelTa.addEventListener("blur", () => { syncBlanksWithLabel(q); persist(); renderBuilder(); });
+  } else {
+    labelField.appendChild(createRichToolbar(() => labelTa));
+  }
   labelField.appendChild(labelTa);
   const formatNote = document.createElement("div");
   formatNote.style.cssText = "font-size:11px; color:var(--muted); margin-top:4px;";
@@ -517,6 +556,83 @@ function renderQuestionBlock(section, q, qIdx) {
       note.textContent = "El corrector acepta coma o punto como separador decimal automáticamente (0,7 = 0.7).";
       body.appendChild(note);
     }
+  }
+
+  if (q.type === "fill_blank") {
+    syncBlanksWithLabel(q);
+
+    const helpNote = document.createElement("div");
+    helpNote.style.cssText = "font-size:12px; color:var(--muted); margin:-4px 0 12px;";
+    helpNote.textContent = 'Escribí la frase arriba y usá el botón "+ Casillero" (en la barra, al lado de B/I/U) en el punto exacto donde el alumno tiene que completar. Cada casillero nuevo se numera solo — abajo aparece "Palabra clave 1", "Palabra clave 2", etc. en el mismo orden.';
+    body.appendChild(helpNote);
+
+    const recomputeBlankPoints = () => {
+      const sum = (q.blanks || []).reduce((a, b) => a + (Number(b.points) || 0), 0);
+      q.points = Math.round(sum * 100) / 100;
+      ptsInput.value = q.points;
+    };
+
+    const blanksField = document.createElement("div");
+    if ((q.blanks || []).length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "empty-note";
+      empty.textContent = 'Todavía no agregaste ningún casillero — usá el botón "+ Casillero" en la barra de arriba.';
+      blanksField.appendChild(empty);
+    }
+    (q.blanks || []).forEach((b, bIdx) => {
+      const blockB = document.createElement("div");
+      blockB.style.cssText = "border:1px solid var(--line); border-radius:2px; padding:10px 12px; margin-bottom:10px;";
+      const kwLabel = document.createElement("label");
+      kwLabel.className = "field-label"; kwLabel.style.marginTop = "0";
+      kwLabel.textContent = `Palabra clave ${bIdx + 1} — respuestas aceptadas (cualquiera de ellas cuenta como correcta)`;
+      blockB.appendChild(kwLabel);
+
+      const tagInput = document.createElement("div");
+      tagInput.className = "tag-input";
+      (b.acceptedAnswers || []).forEach((ans, aIdx) => {
+        const tag = document.createElement("span");
+        tag.className = "tag"; tag.innerHTML = `<span>${escapeHtml(ans)}</span>`;
+        const rm = document.createElement("button"); rm.textContent = "×";
+        rm.addEventListener("click", () => { b.acceptedAnswers.splice(aIdx, 1); persist(); renderBuilder(); });
+        tag.appendChild(rm); tagInput.appendChild(tag);
+      });
+      const newTagInp = document.createElement("input");
+      newTagInp.type = "text"; newTagInp.placeholder = "Escribí una respuesta válida y Enter";
+      newTagInp.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" && newTagInp.value.trim()) {
+          e.preventDefault();
+          b.acceptedAnswers = b.acceptedAnswers || [];
+          b.acceptedAnswers.push(newTagInp.value.trim());
+          persist(); renderBuilder();
+        }
+      });
+      tagInput.appendChild(newTagInp);
+      blockB.appendChild(tagInput);
+
+      const ptsRow = document.createElement("div");
+      ptsRow.style.cssText = "margin-top:8px; display:flex; align-items:center; gap:8px;";
+      const ptsLabel = document.createElement("label");
+      ptsLabel.className = "field-label"; ptsLabel.style.margin = "0";
+      ptsLabel.textContent = "Puntaje por saber esta palabra";
+      ptsRow.appendChild(ptsLabel);
+      const ptsB = document.createElement("input");
+      ptsB.type = "number"; ptsB.min = "0"; ptsB.step = "0.5"; ptsB.style.maxWidth = "90px";
+      ptsB.value = b.points != null ? b.points : 1;
+      ptsB.addEventListener("input", () => { b.points = Number(ptsB.value) || 0; recomputeBlankPoints(); persist(); });
+      ptsRow.appendChild(ptsB);
+      blockB.appendChild(ptsRow);
+
+      blanksField.appendChild(blockB);
+    });
+    body.appendChild(blanksField);
+    recomputeBlankPoints();
+
+    const chk = document.createElement("div"); chk.className = "checkrow";
+    const cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = q.caseInsensitive !== false;
+    cb.addEventListener("change", () => { q.caseInsensitive = cb.checked; persist(); });
+    chk.appendChild(cb);
+    chk.appendChild(document.createTextNode(" Ignorar mayúsculas/minúsculas y tildes al corregir"));
+    body.appendChild(chk);
   }
 
   if (q.type === "multiple_choice") {
@@ -770,7 +886,25 @@ function renderTake() {
       const card = document.createElement("div");
       card.className = "take-question"; card.dataset.qid = q.id;
       const lbl = document.createElement("div");
-      lbl.className = "take-question__label"; lbl.innerHTML = formatRichText(escapeHtml(q.label || "(sin enunciado)"));
+      lbl.className = "take-question__label";
+      if (q.type === "fill_blank") {
+        answers[q.id] = answers[q.id] || [];
+        parseFillBlankLabel(q.label || "").forEach((part) => {
+          if (part.type === "text") {
+            const span = document.createElement("span");
+            span.innerHTML = formatRichText(escapeHtml(part.value));
+            lbl.appendChild(span);
+          } else {
+            const inp = document.createElement("input");
+            inp.type = "text";
+            inp.style.cssText = "display:inline-block; width:130px; margin:0 4px; padding:4px 6px; font-size:14px; border:1px solid var(--line-strong); border-radius:2px;";
+            inp.addEventListener("input", () => { answers[q.id][part.n - 1] = inp.value; });
+            lbl.appendChild(inp);
+          }
+        });
+      } else {
+        lbl.innerHTML = formatRichText(escapeHtml(q.label || "(sin enunciado)"));
+      }
       card.appendChild(lbl);
       const pts = document.createElement("div");
       pts.className = "take-question__points"; pts.textContent = `Valor: ${q.points} punto(s)`;
@@ -783,6 +917,8 @@ function renderTake() {
         inp.type = "text";
         inp.addEventListener("input", () => { answers[q.id] = inp.value; });
         card.appendChild(inp);
+      } else if (q.type === "fill_blank") {
+        // los casilleros ya están dibujados adentro del enunciado, arriba
       } else if (q.multiSelect) {
         answers[q.id] = [];
         const limitMsg = document.createElement("div");
@@ -836,7 +972,7 @@ function renderTake() {
       const card = takeRoot.querySelector(`[data-qid="${q.id}"]`);
       const old = card.querySelector(".result-badge"); if (old) old.remove();
       const badge = document.createElement("span");
-      const parcial = q.multiSelect && !correct && puntos > 0;
+      const parcial = (q.multiSelect || q.type === "fill_blank") && !correct && puntos > 0;
       badge.className = "result-badge " + (correct ? "ok" : "bad");
       badge.textContent = correct ? `✓ Correcta (${puntos} pts)` : (parcial ? `△ Parcial (${puntos}/${q.points} pts)` : `✗ Incorrecta (0/${q.points} pts)`);
       card.querySelector(".take-question__label").appendChild(badge);
