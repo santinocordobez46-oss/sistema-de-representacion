@@ -48,9 +48,14 @@ function getRespuestasSheet_() {
       "FormID", "Formulario", "Comisión", "N° Alumno", "Nombre",
       "Puntaje", "Puntaje Máximo", "Fecha/Hora", "Cambios de pantalla detectados",
       "Detalle (pregunta -> respuesta -> correcta)", "Carrera", "Mail", "Campos extra (JSON)",
-      "Nota (1-10)", "Color manual (vacío=automático, verde, rojo)"
+      "Nota (1-10)", "Color manual (vacío=automático, verde, rojo)",
+      "Asistencia sin rendir (1=sí, confirmó y salió sin responder)"
     ]);
     sheet.setFrozenRows(1);
+  } else if (sheet.getLastColumn() < 16) {
+    // Migración automática: planillas creadas antes de "Confirmar asistencia"
+    // no tienen esta columna. Se agrega sola, sin tocar nada de lo que ya hay.
+    sheet.getRange(1, 16).setValue("Asistencia sin rendir (1=sí, confirmó y salió sin responder)");
   }
   return sheet;
 }
@@ -83,6 +88,7 @@ function doPost(e) {
   try {
     const data = JSON.parse(e.postData.contents);
     if (data.action === "submit") return jsonOut_(submitResponse_(data));
+    if (data.action === "confirmarasistencia") return jsonOut_(confirmarAsistencia_(data));
     if (data.action === "saveform") return jsonOut_(saveForm_(data.form));
     if (data.action === "deleteform") return jsonOut_(deleteForm_(data.formId));
     if (data.action === "deleteformresponses") return jsonOut_(deleteAllResponsesForForm_(data.formId));
@@ -361,15 +367,71 @@ function submitResponse_(data) {
     return { ok: false, error: "El sistema está ocupado guardando otra respuesta en este momento. Esperá unos segundos y volvé a tocar Enviar." };
   }
   try {
+    const sheet = getRespuestasSheet_();
+    const rows = sheet.getDataRange().getValues();
+    let targetRow = -1, esFilaDeAsistencia = false;
+    for (let i = 1; i < rows.length; i++) {
+      if (String(rows[i][0]) === String(data.formId) && normNum_(rows[i][3]) === normNum_(data.numeroAlumno)) {
+        targetRow = i;
+        esFilaDeAsistencia = (rows[i][15] === 1 || rows[i][15] === "1");
+        break;
+      }
+    }
+    if (targetRow !== -1 && !esFilaDeAsistencia) {
+      return { ok: false, error: "Este número de alumno ya tiene una respuesta registrada para este parcialito (en cualquier comisión)." };
+    }
+    const rowValues = [
+      data.formId, data.formTitle, data.comision, data.numeroAlumno, data.nombre,
+      data.score, data.totalPoints, new Date(), data.tabSwitches || 0, JSON.stringify(data.detail || []),
+      data.carrera || "", data.mail || "", JSON.stringify(data.extra || {}), data.nota != null ? data.nota : "",
+      "", 0,
+    ];
+    if (targetRow !== -1) {
+      // Ya había quedado registrada su asistencia al arrancar (sin nota) —
+      // se completa esa MISMA fila con el puntaje real, en vez de duplicarla.
+      sheet.getRange(targetRow + 1, 1, 1, rowValues.length).setValues([rowValues]);
+    } else {
+      // Respaldo por si por algún motivo no se había registrado la
+      // asistencia antes (por ejemplo, un corte de conexión al arrancar).
+      sheet.appendRow(rowValues);
+    }
+    return { ok: true };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/* Se llama automáticamente apenas el alumno aprieta "Empezar" (antes de
+   mostrarle ninguna pregunta) — no es una elección suya, es transparente.
+   Se guarda una fila igual que un "submit" normal (así ocupa el lugar y no
+   puede reingresar dos veces), pero con puntaje y nota vacíos y la columna
+   "Asistencia sin rendir" en 1. Si más adelante entrega el parcial,
+   submitResponse_ COMPLETA esta misma fila con la nota real (no crea una
+   fila nueva). Si el alumno se va sin terminar, esta fila queda tal cual —
+   sirve para que el profe sepa que estuvo en clase aunque no haya nota; se
+   ve como casillero vacío en verde. */
+function confirmarAsistencia_(data) {
+  const formCheck = getFormById_(data.formId);
+  if (!formCheck.ok) {
+    return { ok: false, error: "No se encontró el parcialito." };
+  }
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+  } catch (e) {
+    return { ok: false, error: "El sistema está ocupado guardando otra respuesta en este momento. Esperá unos segundos y volvé a intentar." };
+  }
+  try {
     const already = checkSubmitted_(data.formId, data.numeroAlumno);
     if (already.submitted) {
-      return { ok: false, error: "Este número de alumno ya tiene una respuesta registrada para este parcialito (en cualquier comisión)." };
+      return { ok: false, error: "Este número de alumno ya tiene una respuesta (o asistencia) registrada para este parcialito." };
     }
     const sheet = getRespuestasSheet_();
     sheet.appendRow([
       data.formId, data.formTitle, data.comision, data.numeroAlumno, data.nombre,
-      data.score, data.totalPoints, new Date(), data.tabSwitches || 0, JSON.stringify(data.detail || []),
-      data.carrera || "", data.mail || "", JSON.stringify(data.extra || {}), data.nota != null ? data.nota : "",
+      "", "", new Date(), 0, JSON.stringify([]),
+      data.carrera || "", data.mail || "", JSON.stringify(data.extra || {}), "",
+      "", 1,
     ]);
     return { ok: true };
   } finally {
@@ -438,6 +500,7 @@ function getResults_(formId, comision) {
       carrera: r[10] || "", mail: r[11] || "", extra: safeParse_(r[12] || "{}"),
       nota: (r[13] !== undefined && r[13] !== "" && r[13] !== null) ? r[13] : null,
       colorManual: r[14] || "",
+      asistenciaSinRendir: (r[15] === 1 || r[15] === "1"),
     });
   }
   sortByNumero_(out);
@@ -469,6 +532,7 @@ function getNotas_(comision) {
       formTitle: r[1], score: r[5], totalPoints: r[6], tabSwitches: r[8] || 0,
       nota: (r[13] !== undefined && r[13] !== "" && r[13] !== null) ? r[13] : null,
       colorManual: r[14] || "",
+      asistenciaSinRendir: (r[15] === 1 || r[15] === "1"),
     };
   }
 
