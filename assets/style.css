@@ -560,7 +560,15 @@ input[type=checkbox]:focus-visible, input[type=radio]:focus-visible{
   border:1.5px solid var(--line-strong); border-radius: var(--radius-sm); padding:9px 11px; font-size:13px; font-family: var(--font-body);
   width:auto;
 }
-table.results-table{ width:100%; border-collapse: separate; border-spacing:0; background:#fff; box-shadow: var(--shadow); border-radius: var(--radius); overflow:hidden; }
+table.results-table{ width:100%; border-collapse: separate; border-spacing:0; background:#fff; box-shadow: var(--shadow); border-radius: var(--radius); }
+/* Antes esto se lograba con "overflow:hidden" en la tabla, pero eso rompe
+   el "position:sticky" del encabezado (un contenedor con overflow distinto
+   de "visible" le corta las patas al sticky de sus hijos). En vez de eso,
+   se redondea directamente cada celda de punta. */
+table.results-table thead tr:first-child th:first-child{ border-top-left-radius: var(--radius); }
+table.results-table thead tr:first-child th:last-child{ border-top-right-radius: var(--radius); }
+table.results-table tbody tr:last-child td:first-child{ border-bottom-left-radius: var(--radius); }
+table.results-table tbody tr:last-child td:last-child{ border-bottom-right-radius: var(--radius); }
 table.results-table th, table.results-table td{
   border-bottom: 1px solid var(--line); padding: 11px 14px; font-size: 13px; text-align:left;
 }
