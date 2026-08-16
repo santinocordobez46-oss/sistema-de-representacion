@@ -100,6 +100,7 @@ function renderTable() {
   }
 
   const arrow = (key) => (sortState.key === key ? `<span class="sort-arrow">${sortState.dir === 1 ? "▲" : "▼"}</span>` : "");
+  const initialsMap = computeFormInitialsMap(forms);
   const table = document.createElement("table");
   table.className = "results-table";
   const thead = document.createElement("thead");
@@ -108,7 +109,7 @@ function renderTable() {
       <th class="sortable" data-key="nombre">Nombre${arrow("nombre")}</th>
       <th>Carrera</th>
       <th class="sortable" data-key="comision">Comisión${arrow("comision")}</th>
-      ${forms.map((f) => `<th class="sortable" data-key="${escapeHtml(f.id)}">${escapeHtml(f.title)}${arrow(f.id)}</th>`).join("")}
+      ${forms.map((f) => `<th class="sortable" data-key="${escapeHtml(f.id)}" title="${escapeHtml(f.title)}">${escapeHtml(initialsMap[f.id])}${arrow(f.id)}</th>`).join("")}
       <th class="sortable" data-key="total">Total${arrow("total")}</th>
     </tr>`;
   table.appendChild(thead);
@@ -151,4 +152,4 @@ document.getElementById("btn-refresh").addEventListener("click", () => load(fals
 
 setInterval(() => load(true), 25000);
 
-load();}
+load();
