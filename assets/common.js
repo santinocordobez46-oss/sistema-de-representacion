@@ -402,6 +402,31 @@ function formatResolvedNota(row) {
   return formatNotaValue(resolveNota(row));
 }
 
+/* ---------- iniciales de cada parcialito, para el libro de notas ----------
+   Con muchos parcialitos (16+) el nombre completo en cada columna obliga a
+   correr la pantalla para el costado. formInitials() toma la primera letra
+   de cada palabra del título ("Parcialito Nro 0" -> "PN0"). Si dos títulos
+   distintos dan las mismas iniciales, computeFormInitialsMap() les agrega un
+   número al final para no confundirlos. El título completo sigue disponible
+   como tooltip (atributo title) en la celda. */
+function formInitials(title) {
+  const clean = String(title || "").trim();
+  if (!clean) return "?";
+  return clean.split(/\s+/).map((w) => w[0]).join("").toUpperCase();
+}
+function computeFormInitialsMap(forms) {
+  const used = new Set();
+  const map = {};
+  (forms || []).forEach((f) => {
+    const base = formInitials(f.title);
+    let ini = base, n = 2;
+    while (used.has(ini)) { ini = base + n; n++; }
+    used.add(ini);
+    map[f.id] = ini;
+  });
+  return map;
+}
+
 /* ---------- "Confirmar asistencia" (el alumno escaneó, confirmó que está en
    clase, pero eligió no rendir) ----------
    Esa fila queda guardada en Respuestas sin puntaje/nota, marcada con
