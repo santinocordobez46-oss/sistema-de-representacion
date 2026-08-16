@@ -102,7 +102,7 @@ function renderTable() {
   const arrow = (key) => (sortState.key === key ? `<span class="sort-arrow">${sortState.dir === 1 ? "▲" : "▼"}</span>` : "");
   const initialsMap = computeFormInitialsMap(forms);
   const table = document.createElement("table");
-  table.className = "results-table";
+  table.className = "results-table sticky-head";
   const thead = document.createElement("thead");
   thead.innerHTML = `<tr>
       <th class="sortable" data-key="numero">N° Alumno${arrow("numero")}</th>
