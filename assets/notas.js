@@ -109,12 +109,13 @@ function renderTable() {
     return;
   }
 
+  const initialsMap = computeFormInitialsMap(forms);
   const table = document.createElement("table");
   table.className = "results-table";
   const thead = document.createElement("thead");
   thead.innerHTML = `<tr>
       <th>N° Alumno</th><th>Nombre</th><th>Carrera</th><th>Comisión</th><th>Mail</th>
-      ${forms.map((f) => `<th>${escapeHtml(f.title)}</th>`).join("")}
+      ${forms.map((f) => `<th title="${escapeHtml(f.title)}">${escapeHtml(initialsMap[f.id])}</th>`).join("")}
       <th>Total</th><th>Faltas</th><th>Cambios pantalla (total)</th><th>Acciones</th>
     </tr>`;
   table.appendChild(thead);
