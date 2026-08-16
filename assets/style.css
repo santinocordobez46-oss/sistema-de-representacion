@@ -574,6 +574,15 @@ table.results-table th.sortable{ cursor:pointer; user-select:none; white-space:n
 table.results-table th.sortable:hover{ background: var(--blue); color:#fff; }
 table.results-table th.sortable .sort-arrow{ opacity:.55; margin-left:3px; }
 
+/* ---------- encabezado fijo (para libros de notas con muchos parcialitos):
+   al bajar por la lista de alumnos, la fila de títulos ("PN0", "PN1"...)
+   se queda pegada arriba de la pantalla, así siempre se sabe qué columna
+   es cada parcialito sin tener que volver a subir. ---------- */
+table.results-table.sticky-head thead th{
+  position: sticky; top: 0; z-index: 3;
+  box-shadow: 0 1px 0 var(--line);
+}
+
 /* ---------- tarjetas de QR por comisión ---------- */
 .qr-card{
   background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
