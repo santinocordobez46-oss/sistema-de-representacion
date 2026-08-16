@@ -111,7 +111,7 @@ function renderTable() {
 
   const initialsMap = computeFormInitialsMap(forms);
   const table = document.createElement("table");
-  table.className = "results-table";
+  table.className = "results-table sticky-head";
   const thead = document.createElement("thead");
   thead.innerHTML = `<tr>
       <th>N° Alumno</th><th>Nombre</th><th>Carrera</th><th>Comisión</th><th>Mail</th>
