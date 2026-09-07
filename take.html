@@ -54,11 +54,7 @@ async function boot() {
     return;
   }
   try {
-    const url = new URL(takeApiUrl);
-    url.searchParams.set("action", "getform");
-    url.searchParams.set("formId", takeFormId);
-    const res = await fetch(url.toString());
-    const data = await res.json();
+    const data = await apiGetExplicit(takeApiUrl, "getform", { formId: takeFormId });
     if (!data.ok) throw new Error(data.error || "No se encontró el parcialito");
     form = data.form;
   } catch (err) {
@@ -101,11 +97,7 @@ function renderWaitingRoom() {
     </div>`;
   setTimeout(async () => {
     try {
-      const url = new URL(takeApiUrl);
-      url.searchParams.set("action", "getform");
-      url.searchParams.set("formId", takeFormId);
-      const res = await fetch(url.toString());
-      const data = await res.json();
+      const data = await apiGetExplicit(takeApiUrl, "getform", { formId: takeFormId });
       if (data.ok) form = data.form;
     } catch (e) { /* reintenta igual en el próximo ciclo */ }
     if (computeEffectiveExamStatus(form, fixedComision) === "abierto") renderIdentity();
@@ -168,11 +160,7 @@ function renderIdentity() {
     const prevText = checkBtn.textContent;
     checkBtn.textContent = "Buscando…";
     try {
-      const url = new URL(takeApiUrl);
-      url.searchParams.set("action", "lookupstudent");
-      url.searchParams.set(paramKey, value);
-      const fetchRes = await fetch(url.toString());
-      const res = await fetchRes.json();
+      const res = await apiGetExplicit(takeApiUrl, "lookupstudent", { [paramKey]: value });
       if (res.ok && res.found) {
         if (nameInp && res.nombre) nameInp.value = res.nombre;
         if (numInp && res.numeroAlumno) numInp.value = res.numeroAlumno;
@@ -267,13 +255,7 @@ function renderIdentity() {
 
     startBtn.disabled = true; startBtn.textContent = "Verificando…";
     try {
-      const url = new URL(takeApiUrl);
-      url.searchParams.set("action", "check");
-      url.searchParams.set("formId", form.id);
-      url.searchParams.set("numeroAlumno", numeroAlumno);
-      url.searchParams.set("comision", comision);
-      const res = await fetch(url.toString());
-      const data = await res.json();
+      const data = await apiGetExplicit(takeApiUrl, "check", { formId: form.id, numeroAlumno, comision });
       if (data.submitted) {
         identityRoot.innerHTML = '<div class="warn-banner">Este número de alumno ya tiene una respuesta (o asistencia) registrada para este parcialito en esta comisión. No se puede volver a rendir.</div>';
         return;
@@ -286,9 +268,12 @@ function renderIdentity() {
        registrado que asistió (fila "asistencia sin rendir", sin nota). Si
        más adelante entrega el parcial, esa misma fila se completa con su
        puntaje y nota reales. Si se va sin terminar, queda tal cual: asistió,
-       no rindió — no hace falta que haga nada más ni que elija nada. */
+       no rindió — no hace falta que haga nada más ni que elija nada.
+       Usa fetchJsonWithRetry_ (con reintentos) en vez de un fetch simple,
+       porque justo acá es donde más alumnos pegan al mismo tiempo (todos
+       arrancando juntos). */
     try {
-      await fetch(takeApiUrl, {
+      await fetchJsonWithRetry_(takeApiUrl, {
         method: "POST",
         headers: { "Content-Type": "text/plain;charset=utf-8" },
         body: JSON.stringify({
@@ -511,10 +496,21 @@ function renderTake(identity) {
     return String(given);
   }
 
-  function doSubmit(auto) {
+  async function doSubmit(auto) {
     if (timerInterval) clearInterval(timerInterval);
     const activeBtn = takeRoot.querySelector("button.btn-accent");
     if (activeBtn) { activeBtn.disabled = true; activeBtn.textContent = "Enviando…"; }
+
+    /* Si se acabó el tiempo, TODO el curso suele terminar casi en el mismo
+       segundo (arrancaron todos juntos con el mismo límite de tiempo). Para
+       no mandar todos los pedidos exactamente a la vez y saturar el
+       servidor justo en ese instante, cada alumno espera un pequeño tiempo
+       al azar (0 a 4 segundos) antes de mandar su entrega. La corrección
+       (puntaje) ya se calcula con lo que tenía respondido hasta este
+       momento, así que esta espera no le hace perder ni ganar nada. */
+    if (auto) {
+      await new Promise((r) => setTimeout(r, Math.random() * 4000));
+    }
 
     let score = 0;
     const detail = [];
@@ -531,7 +527,12 @@ function renderTake(identity) {
     const nota = scoreToNotaCurva(score, totalPoints);
     const tabSwitchesTotal = tabSwitchesGeneral + Object.values(tabSwitchesByQuestion).reduce((a, v) => a + v, 0);
 
-    fetch(takeApiUrl, {
+    // fetchJsonWithRetry_ (definida en common.js) reintenta sola varias
+    // veces con pausas crecientes si el servidor está momentáneamente
+    // saturado — antes esto era un fetch simple, sin reintento, y era la
+    // causa más probable de que algunas entregas se perdieran justo cuando
+    // se acababa el tiempo para todo el curso a la vez.
+    const data = await fetchJsonWithRetry_(takeApiUrl, {
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify({
@@ -540,27 +541,39 @@ function renderTake(identity) {
         nombre: identity.nombre, mail: identity.mail || "", extra: identity.extra || {},
         score, totalPoints, tabSwitches: tabSwitchesTotal, detail, nota,
       }),
-    }).then((r) => r.json()).catch((e) => ({ ok: false, error: "No se pudo conectar con la planilla. Probá de nuevo si tenés conexión." }))
-      .then((data) => {
-        takeRoot.innerHTML = "";
-        const panel = document.createElement("div");
-        if (data && data.ok) {
-          localStorage.setItem(SUBMITTED_KEY_PREFIX + form.id, JSON.stringify({
-            numeroAlumno: identity.numeroAlumno, comision: identity.comision, score, totalPoints, nota, ts: Date.now(),
-          }));
-          panel.className = "score-panel";
-          panel.innerHTML = `<span>${auto ? "Tiempo agotado — envío automático" : "Nota obtenida"}</span><span class="num">${formatNotaValue(nota)}</span>`;
-          takeRoot.appendChild(panel);
-          const note = document.createElement("p");
-          note.className = "hint"; note.style.cssText = "font-size:12px;color:var(--muted);margin-top:10px;";
-          note.textContent = "Tu respuesta ya quedó registrada. Podés cerrar esta ventana.";
-          takeRoot.appendChild(note);
-        } else {
-          panel.className = "warn-banner";
-          panel.textContent = (data && data.error) || "No se pudo registrar la respuesta.";
-          takeRoot.appendChild(panel);
-        }
-      });
+    });
+
+    takeRoot.innerHTML = "";
+    const panel = document.createElement("div");
+    if (data && data.ok) {
+      localStorage.setItem(SUBMITTED_KEY_PREFIX + form.id, JSON.stringify({
+        numeroAlumno: identity.numeroAlumno, comision: identity.comision, score, totalPoints, nota, ts: Date.now(),
+      }));
+      panel.className = "score-panel";
+      panel.innerHTML = `<span>${auto ? "Tiempo agotado — envío automático" : "Nota obtenida"}</span><span class="num">${formatNotaValue(nota)}</span>`;
+      takeRoot.appendChild(panel);
+      const note = document.createElement("p");
+      note.className = "hint"; note.style.cssText = "font-size:12px;color:var(--muted);margin-top:10px;";
+      note.textContent = "Tu respuesta ya quedó registrada. Podés cerrar esta ventana.";
+      takeRoot.appendChild(note);
+    } else {
+      // Después de reintentar varias veces solo, todavía no se pudo enviar.
+      // En vez de dejar al alumno sin ninguna salida, se le ofrece un botón
+      // para reintentar a mano — sus respuestas siguen en memoria mientras
+      // no cierre esta pestaña, así que nada se pierde todavía.
+      panel.className = "warn-banner";
+      panel.textContent = (data && data.error) || "No se pudo registrar la respuesta.";
+      takeRoot.appendChild(panel);
+      const retryBtn = document.createElement("button");
+      retryBtn.className = "btn btn-accent"; retryBtn.style.marginTop = "12px";
+      retryBtn.textContent = "Reintentar envío";
+      retryBtn.addEventListener("click", () => doSubmit(auto));
+      takeRoot.appendChild(retryBtn);
+      const note = document.createElement("p");
+      note.className = "hint"; note.style.cssText = "font-size:12px;color:var(--muted);margin-top:8px;";
+      note.textContent = "No cierres esta pestaña — tus respuestas siguen guardadas acá hasta que se pueda enviar.";
+      takeRoot.appendChild(note);
+    }
   }
 }
 
