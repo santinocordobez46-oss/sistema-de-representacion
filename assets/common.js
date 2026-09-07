@@ -9,21 +9,50 @@ function uid(prefix = "id") { return prefix + "_" + Math.random().toString(36).s
 function getApiUrl() { return localStorage.getItem(GLOBAL_URL_KEY) || ""; }
 function setApiUrl(url) { localStorage.setItem(GLOBAL_URL_KEY, url.trim()); }
 
-/* ---------- llamadas al backend ---------- */
+/* ---------- llamadas al backend ----------
+   El backend (Apps Script) puede estar momentáneamente saturado cuando
+   muchos alumnos pegan al mismo tiempo (por ejemplo, todos arrancando el
+   parcial juntos): en ese caso a veces responde con error, o directamente
+   con una página de error en HTML en vez de JSON. fetchJsonWithRetry_()
+   reintenta solo, con una pausa cada vez más larga, antes de rendirse y
+   mostrarle un error al usuario — así la mayoría de esos tropiezos
+   momentáneos ni se notan. */
+async function fetchJsonWithRetry_(url, options, attempts = 4) {
+  const delays = [1200, 2500, 4500, 7000]; // ms entre reintentos, va creciendo
+  let lastError = null;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const res = await fetch(url, options);
+      const text = await res.text();
+      try {
+        return JSON.parse(text);
+      } catch (parseErr) {
+        // Esto pasa típicamente cuando Google devolvió una página de error
+        // HTML en vez del JSON esperado (saturación, permisos, deploy viejo).
+        lastError = new Error("El servidor no devolvió una respuesta válida (puede estar saturado).");
+      }
+    } catch (networkErr) {
+      lastError = networkErr;
+    }
+    if (i < attempts - 1) {
+      await new Promise((r) => setTimeout(r, delays[i] || 7000));
+    }
+  }
+  return { ok: false, error: "El sistema está muy ocupado en este momento. Esperá unos segundos e intentá de nuevo. (" + (lastError ? lastError.message : "sin detalle") + ")" };
+}
+
 async function apiGet(action, extraParams = {}) {
   const url = new URL(getApiUrl());
   url.searchParams.set("action", action);
   Object.entries(extraParams).forEach(([k, v]) => url.searchParams.set(k, v));
-  const res = await fetch(url.toString());
-  return res.json();
+  return fetchJsonWithRetry_(url.toString());
 }
 async function apiPost(body) {
-  const res = await fetch(getApiUrl(), {
+  return fetchJsonWithRetry_(getApiUrl(), {
     method: "POST",
     headers: { "Content-Type": "text/plain;charset=utf-8" },
     body: JSON.stringify(body),
   });
-  return res.json();
 }
 
 async function apiListForms() { return apiGet("listforms"); }
@@ -64,8 +93,7 @@ async function apiGetExplicit(apiUrl, action, extraParams = {}) {
   const url = new URL(apiUrl);
   url.searchParams.set("action", action);
   Object.entries(extraParams).forEach(([k, v]) => url.searchParams.set(k, v));
-  const res = await fetch(url.toString());
-  return res.json();
+  return fetchJsonWithRetry_(url.toString());
 }
 async function apiNotasPublic(apiUrl, comision) {
   return apiGetExplicit(apiUrl, "notas", comision ? { comision } : {});
