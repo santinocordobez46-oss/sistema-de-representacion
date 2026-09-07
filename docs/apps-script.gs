@@ -362,7 +362,9 @@ function submitResponse_(data) {
   }
   const lock = LockService.getScriptLock();
   try {
-    lock.waitLock(10000);
+    // 25s en vez de 10s: en el pico de entregas (todos terminando cerca del
+    // mismo momento) 10s no alcanzaba para hacer cola y muchos se caían.
+    lock.waitLock(25000);
   } catch (e) {
     return { ok: false, error: "El sistema está ocupado guardando otra respuesta en este momento. Esperá unos segundos y volvé a tocar Enviar." };
   }
@@ -417,7 +419,10 @@ function confirmarAsistencia_(data) {
   }
   const lock = LockService.getScriptLock();
   try {
-    lock.waitLock(10000);
+    // 25s en vez de 10s: esta función se dispara SOLA apenas cada alumno
+    // toca "Empezar", así que si todo el curso arranca junto es el momento
+    // de mayor cola de todos — 10s se quedaba corto casi siempre.
+    lock.waitLock(25000);
   } catch (e) {
     return { ok: false, error: "El sistema está ocupado guardando otra respuesta en este momento. Esperá unos segundos y volvé a intentar." };
   }
