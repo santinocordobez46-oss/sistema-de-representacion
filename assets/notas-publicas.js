@@ -79,7 +79,11 @@ function comparator(key) {
 function renderTable() {
   const comFilter = fixedComision || document.getElementById("filter-comision").value;
   const textFilter = normalizeText(document.getElementById("filter-nombre").value);
-  const forms = notasData.forms;
+  // Las iniciales se calculan con el orden ORIGINAL (de creación) y recién
+  // después se reordenan las columnas, así un parcialito nunca cambia de
+  // nombre (PLN62 -> PLN6) por haberse movido de lugar.
+  const initialsMap = computeFormInitialsMap(notasData.forms);
+  const forms = ordenarFormsParaNotas(notasData.forms, initialsMap);
   let students = notasData.students.filter((s) => {
     if (comFilter && s.comision !== comFilter) return false;
     if (textFilter) {
@@ -100,7 +104,6 @@ function renderTable() {
   }
 
   const arrow = (key) => (sortState.key === key ? `<span class="sort-arrow">${sortState.dir === 1 ? "▲" : "▼"}</span>` : "");
-  const initialsMap = computeFormInitialsMap(forms);
   const table = document.createElement("table");
   table.className = "results-table sticky-head";
   const thead = document.createElement("thead");
