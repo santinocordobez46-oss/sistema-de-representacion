@@ -412,6 +412,8 @@ function sortFormsByOrden(forms, fallbackCmp) {
   const sin = list.filter((f) => f.orden === undefined || f.orden === null || f.orden === "");
   if (fallbackCmp) sin.sort(fallbackCmp);
   return [...con, ...sin];
+}
+
 // Las columnas van al revés del panel: la primera tarjeta del panel es la última columna.
 // Los parcialitos nuevos (sin orden todavía) quedan al final, a la derecha.
 function ordenarFormsParaNotas(forms, initialsMap) {
