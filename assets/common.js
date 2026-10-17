@@ -378,11 +378,16 @@ function formatResolvedNota(row) {
   return formatNotaValue(resolveNota(row));
 }
 
-/* ---------- iniciales de cada parcialito, para el libro de notas ---------- */
+/* ---------- iniciales de cada parcialito, para el libro de notas ----------
+   Los números se toman completos: "PARCIALITO Lámina N° 17" -> "PLN17". */
 function formInitials(title) {
   const clean = String(title || "").trim();
   if (!clean) return "?";
-  return clean.split(/\s+/).map((w) => w[0]).join("").toUpperCase();
+  return clean.split(/\s+/).map((w) => {
+    if (/^\d+([.,]\d+)?$/.test(w)) return w.replace(/[.,]/g, "");
+    const m = w.match(/[\p{L}\p{N}]/u);
+    return m ? m[0] : "";
+  }).join("").toUpperCase();
 }
 function computeFormInitialsMap(forms) {
   const used = new Set();
@@ -397,26 +402,20 @@ function computeFormInitialsMap(forms) {
   return map;
 }
 
-/* ---------- orden fijo de las columnas del libro de notas ----------
-   Se ordena por las INICIALES que se ven en cada columna. Lo que no esté
-   en esta lista (ej: un parcialito nuevo) va después de los listados, y el
-   "1PA" (1er Parcial Asistido) siempre queda último, pegado al Total.
-   Para agregar uno nuevo (ej: PLN16), sumalo a la lista en su lugar. */
-const ORDEN_COLUMNAS_NOTAS = [
-  "PLN1", "PLN2", "PLN3", "PLN4", "PLN5", "PLN6", "PLN62",
-  "PLN7", "PLN8", "PLN9",
-  "PLN11", "PLN12", "PLN13", "PLN14", "PLN15",
-];
-const COLUMNA_ULTIMA_NOTAS = "1PA";
-
+/* ---------- orden de los parcialitos: el que el profe arma arrastrando las tarjetas ----------
+   Cada parcialito guarda su posición en form.orden. Los que todavía no tienen
+   posición (por ejemplo uno recién creado) van al final, en el orden de fallbackCmp. */
+function sortFormsByOrden(forms, fallbackCmp) {
+  const list = (forms || []).slice();
+  const con = list.filter((f) => f.orden !== undefined && f.orden !== null && f.orden !== "")
+                  .sort((a, b) => Number(a.orden) - Number(b.orden));
+  const sin = list.filter((f) => f.orden === undefined || f.orden === null || f.orden === "");
+  if (fallbackCmp) sin.sort(fallbackCmp);
+  return [...con, ...sin];
+}
+// Se mantiene el nombre para que notas.js y notas-publicas.js no cambien.
 function ordenarFormsParaNotas(forms, initialsMap) {
-  const rank = (f) => {
-    const ini = initialsMap[f.id];
-    if (ini === COLUMNA_ULTIMA_NOTAS) return 100000;
-    const i = ORDEN_COLUMNAS_NOTAS.indexOf(ini);
-    return i === -1 ? 50000 : i;
-  };
-  return (forms || []).slice().sort((a, b) => rank(a) - rank(b));
+  return sortFormsByOrden(forms, null); // sin orden propio, queda el de creación que manda el servidor
 }
 
 /* ---------- "Confirmar asistencia" ---------- */
