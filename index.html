@@ -52,6 +52,7 @@
         <button class="btn btn-ghost" id="btn-change-url">⚙ Cambiar planilla</button>
       </div>
     </div>
+    <p id="orden-status" style="font-size:12px; color:var(--muted); margin:-6px 0 14px;">Arrastrá las tarjetas para ordenarlas: ese es el orden de las columnas del Libro de notas.</p>
     <div class="forms-grid" id="forms-grid"></div>
   </div>
 
@@ -111,7 +112,7 @@ async function loadDashboard() {
   try {
     const res = await apiListForms();
     if (!res.ok) throw new Error(res.error);
-    forms = res.forms || [];
+    forms = sortFormsByOrden(res.forms || [], (a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt));
   } catch (err) {
     grid.innerHTML = `<p class="empty-note">No se pudo cargar la lista (${escapeHtml(err.message)}).</p>`;
     return;
@@ -123,6 +124,8 @@ async function loadDashboard() {
   forms.forEach((form) => {
     const card = document.createElement("div");
     card.className = "form-card";
+    card.draggable = true;
+    card.dataset.id = form.id;
     card.innerHTML = `
       <span class="form-card__tick">${questionCountOf(form)} preg. · ${totalPointsOf(form)} pts</span>
       <div class="form-card__title">${escapeHtml(form.title || "Sin título")}</div>
@@ -152,6 +155,7 @@ async function loadDashboard() {
       copy.scheduledCloseAt = null;
       copy.createdAt = new Date().toISOString();
       delete copy.updatedAt;
+      delete copy.orden;
       await apiSaveForm(copy);
       location.href = "editor.html?id=" + copy.id;
     });
@@ -179,6 +183,56 @@ async function loadDashboard() {
     });
     card.addEventListener("click", () => { location.href = "editor.html?id=" + form.id; });
     grid.appendChild(card);
+  });
+
+  /* ---------- arrastrar para ordenar ---------- */
+  const ordenStatus = document.getElementById("orden-status");
+  const ordenHint = "Arrastrá las tarjetas para ordenarlas: ese es el orden de las columnas del Libro de notas.";
+  ordenStatus.textContent = ordenHint;
+  let dragged = null;
+
+  async function guardarOrden() {
+    const ids = Array.from(grid.querySelectorAll(".form-card")).map((c) => c.dataset.id);
+    const byId = {};
+    forms.forEach((f) => { byId[f.id] = f; });
+    const cambios = [];
+    ids.forEach((id, i) => {
+      const f = byId[id];
+      if (f && f.orden !== i) { f.orden = i; cambios.push(f); }
+    });
+    if (cambios.length === 0) return;
+    ordenStatus.textContent = "Guardando orden…";
+    try {
+      for (const f of cambios) {
+        const res = await apiSaveForm(f);
+        if (res && res.ok === false) throw new Error(res.error || "error desconocido");
+      }
+      ordenStatus.textContent = "Orden guardado ✓";
+      setTimeout(() => { ordenStatus.textContent = ordenHint; }, 2500);
+    } catch (err) {
+      ordenStatus.textContent = "⚠ No se pudo guardar el orden: " + (err.message || err);
+    }
+  }
+
+  grid.querySelectorAll(".form-card").forEach((card) => {
+    card.addEventListener("dragstart", (e) => {
+      dragged = card;
+      card.classList.add("dragging");
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", card.dataset.id);
+    });
+    card.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      if (!dragged || dragged === card) return;
+      const r = card.getBoundingClientRect();
+      const antes = e.clientX < r.left + r.width / 2;
+      grid.insertBefore(dragged, antes ? card : card.nextSibling);
+    });
+    card.addEventListener("drop", (e) => e.preventDefault());
+    card.addEventListener("dragend", () => {
+      card.classList.remove("dragging");
+      if (dragged) { dragged = null; guardarOrden(); }
+    });
   });
 
   const newCard = document.createElement("button");
