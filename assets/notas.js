@@ -92,7 +92,11 @@ function buildNotaCell(p, formId, numeroAlumno) {
 function renderTable() {
   const comFilter = document.getElementById("filter-comision").value;
   const textFilter = normalizeText(document.getElementById("filter-nombre").value);
-  const forms = notasData.forms;
+  // Las iniciales se calculan con el orden ORIGINAL (de creación) y recién
+  // después se reordenan las columnas, así un parcialito nunca cambia de
+  // nombre (PLN62 -> PLN6) por haberse movido de lugar.
+  const initialsMap = computeFormInitialsMap(notasData.forms);
+  const forms = ordenarFormsParaNotas(notasData.forms, initialsMap);
   const students = sortByComisionYNumero(notasData.students.filter((s) => {
     if (comFilter && s.comision !== comFilter) return false;
     if (textFilter) {
@@ -109,7 +113,6 @@ function renderTable() {
     return;
   }
 
-  const initialsMap = computeFormInitialsMap(forms);
   const table = document.createElement("table");
   table.className = "results-table sticky-head";
   const thead = document.createElement("thead");
@@ -223,7 +226,7 @@ document.getElementById("btn-refresh").addEventListener("click", () => load(fals
 
 document.getElementById("btn-export-xlsx").addEventListener("click", () => {
   if (!notasData || notasData.students.length === 0) { alert("No hay datos para exportar todavía."); return; }
-  const forms = notasData.forms;
+  const forms = ordenarFormsParaNotas(notasData.forms, computeFormInitialsMap(notasData.forms));
   const students = sortByComisionYNumero(notasData.students);
 
   const headerLabels = ["N° Alumno", "Nombre", "Carrera", "Comisión", "Mail", ...forms.map((f) => f.title), "Nota Total", "Faltas", "Cambios de pantalla (total)"];
