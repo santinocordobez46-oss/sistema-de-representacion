@@ -625,3 +625,7 @@ table.results-table.sticky-head thead th{
 .tag-pill.low{ background: var(--accent-soft); color: var(--accent-strong); }
 .input-comision{ width:100%; padding:6px 8px; border:1.5px solid var(--line-strong); border-radius: var(--radius-sm); font-family: var(--font-body); font-size:13px; }
 .input-comision:focus{ outline:none; border-color: var(--blue); }
+
+/* ---------- tarjetas arrastrables (orden de columnas) ---------- */
+.form-card[draggable="true"]{ cursor: grab; }
+.form-card.dragging{ opacity: .4; transform: scale(.97); border-color: var(--blue); }
