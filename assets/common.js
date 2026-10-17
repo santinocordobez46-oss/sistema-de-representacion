@@ -9,16 +9,9 @@ function uid(prefix = "id") { return prefix + "_" + Math.random().toString(36).s
 function getApiUrl() { return localStorage.getItem(GLOBAL_URL_KEY) || ""; }
 function setApiUrl(url) { localStorage.setItem(GLOBAL_URL_KEY, url.trim()); }
 
-/* ---------- llamadas al backend ----------
-   El backend (Apps Script) puede estar momentáneamente saturado cuando
-   muchos alumnos pegan al mismo tiempo (por ejemplo, todos arrancando el
-   parcial juntos): en ese caso a veces responde con error, o directamente
-   con una página de error en HTML en vez de JSON. fetchJsonWithRetry_()
-   reintenta solo, con una pausa cada vez más larga, antes de rendirse y
-   mostrarle un error al usuario — así la mayoría de esos tropiezos
-   momentáneos ni se notan. */
+/* ---------- llamadas al backend ---------- */
 async function fetchJsonWithRetry_(url, options, attempts = 4) {
-  const delays = [1200, 2500, 4500, 7000]; // ms entre reintentos, va creciendo
+  const delays = [1200, 2500, 4500, 7000];
   let lastError = null;
   for (let i = 0; i < attempts; i++) {
     try {
@@ -27,8 +20,6 @@ async function fetchJsonWithRetry_(url, options, attempts = 4) {
       try {
         return JSON.parse(text);
       } catch (parseErr) {
-        // Esto pasa típicamente cuando Google devolvió una página de error
-        // HTML en vez del JSON esperado (saturación, permisos, deploy viejo).
         lastError = new Error("El servidor no devolvió una respuesta válida (puede estar saturado).");
       }
     } catch (networkErr) {
@@ -84,11 +75,7 @@ async function apiSetAlumnosConfig(sheetId, tabName) { return apiPost({ action: 
 async function apiSetComisionAlumno(numeroAlumno, comision) { return apiPost({ action: "setcomisionalumno", numeroAlumno, comision }); }
 async function apiListAlumnosPublic(apiUrl) { return apiGetExplicit(apiUrl, "listalumnos"); }
 
-/* ---------- variante para páginas públicas (sin login del profesor) ----------
-   Las mismas llamadas GET de arriba, pero con la URL de la API pasada
-   explícitamente (viene de la URL del link/QR, ?api=...) en vez de leerla
-   de localStorage — así un alumno puede abrir el link sin haber configurado
-   nada en ese navegador. */
+/* ---------- variante para páginas públicas ---------- */
 async function apiGetExplicit(apiUrl, action, extraParams = {}) {
   const url = new URL(apiUrl);
   url.searchParams.set("action", action);
@@ -109,14 +96,7 @@ function normalizeNumber(s) {
   return Number.isNaN(n) ? null : n;
 }
 
-/* ---------- corrección de una pregunta (compartida entre la vista previa del editor y el examen real) ----------
-   Devuelve { correct, puntos }. Para opción múltiple con varias correctas,
-   el puntaje es PROPORCIONAL: si cada opción correcta tiene su propio valor
-   cargado (q.optionPoints), se suma solo el de las que el alumno marcó bien
-   (nunca resta por marcar una incorrecta, nunca supera el puntaje total). Si
-   no hay valores individuales cargados (preguntas viejas), se reparte el
-   puntaje total en partes iguales entre las opciones correctas, así ninguna
-   pregunta de "marcar varias" queda en todo-o-nada por defecto. */
+/* ---------- corrección de una pregunta ---------- */
 function scoreQuestionAnswer(q, given) {
   if (q.type === "short_text") {
     if (q.matchMode === "keywords" && (q.keywords || []).length) {
@@ -152,7 +132,7 @@ function scoreQuestionAnswer(q, given) {
       if (correctIds.includes(id) && pointsMap[id] != null) puntos += Number(pointsMap[id]) || 0;
     });
     puntos = Math.max(0, Math.min(puntos, totalPoints));
-    puntos = Math.round(puntos * 100) / 100; // evita arrastre de decimales flotantes
+    puntos = Math.round(puntos * 100) / 100;
     const correct = givenIds.length === correctIds.length && correctIds.every((id) => givenIds.includes(id));
     return { correct, puntos };
   }
@@ -177,18 +157,7 @@ function scoreQuestionAnswer(q, given) {
   return { correct: false, puntos: 0 };
 }
 
-/* ---------- "Duplicar Palabras Claves" — frase con casilleros numerados ----------
-   El profesor escribe la frase entera y marca cada espacio en blanco con un
-   marcador {n} en el punto exacto donde va (se inserta solo con el botón
-   "+ Casillero" del editor, nunca a mano). parseFillBlankLabel() separa la
-   frase en pedazos de texto y casilleros, en el orden en que aparecen, para
-   poder dibujar un <input> metido justo en ese lugar (tanto en el examen real
-   como en la vista previa del editor). maxBlankNumber() dice qué número le
-   toca al próximo casillero que se agregue. syncBlanksWithLabel() mantiene la
-   lista de casilleros (con sus respuestas aceptadas y puntaje) del mismo
-   largo que la cantidad de marcadores que hay ahora en el texto — si el
-   profesor borra un marcador de la frase, se borra también su casillero de
-   abajo; si agrega uno nuevo, aparece un casillero nuevo vacío. */
+/* ---------- "Duplicar Palabras Claves" — frase con casilleros numerados ---------- */
 function parseFillBlankLabel(label) {
   const parts = [];
   const regex = /\{(\d+)\}/g;
@@ -224,11 +193,7 @@ function sortByComisionYNumero(list) {
   });
 }
 
-/* ---------- estado efectivo del examen: manual + horario programado (opcional) ----------
-   Cada comisión puede tener su propio horario (form.comisionSchedules[comision]).
-   Si esa comisión no tiene uno propio, se usa el horario general del formulario
-   (form.scheduledOpenAt / form.scheduledCloseAt) como respaldo. Si no hay nada
-   programado (ni por comisión ni general), manda el estado manual (examStatus). */
+/* ---------- estado efectivo del examen: manual + horario programado (opcional) ---------- */
 function getScheduleFor(form, comision) {
   const perComision = comision && form.comisionSchedules ? form.comisionSchedules[comision] : null;
   if (perComision && (perComision.openAt || perComision.closeAt)) return perComision;
@@ -289,7 +254,7 @@ function defaultIntroConfig() {
 function makeBlankCustomField(type) {
   const base = { id: uid("f"), type, label: "" };
   if (type === "choice") return { ...base, options: [{ id: uid("o"), text: "" }] };
-  return base; // "text"
+  return base;
 }
 
 function defaultExampleForm() {
@@ -351,8 +316,8 @@ function defaultExampleForm() {
       },
     ],
   };
-  form.sections[3].questions[0].correctOptionId = form.sections[3].questions[0].options[3].id; // 1,6 h
-  form.sections[4].questions[0].correctOptionId = form.sections[4].questions[0].options[3].id; // D
+  form.sections[3].questions[0].correctOptionId = form.sections[3].questions[0].options[3].id;
+  form.sections[4].questions[0].correctOptionId = form.sections[4].questions[0].options[3].id;
   return form;
 }
 
@@ -370,13 +335,7 @@ function escapeHtml(str) {
   return String(str).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
-/* ---------- formato de texto enriquecido (negrita/cursiva/subrayado) ----------
-   Sintaxis simple tipo markdown: **negrita**, *cursiva/inclinada*, __subrayado__.
-   Siempre se aplica DESPUÉS de escapeHtml(), nunca antes, para que no se pueda
-   inyectar HTML real a través del enunciado. */
-/* ---------- nota en escala de 1 a 10 — fórmula VIEJA (lineal, proporcional) ----------
-   Se deja intacta para siempre: es la que usan las respuestas guardadas
-   ANTES de la curva nueva, así nunca les cambia la nota ya mostrada. */
+/* ---------- nota en escala de 1 a 10 — fórmula VIEJA (lineal) ---------- */
 function scoreToNota(score, totalPoints) {
   const total = Number(totalPoints) || 0;
   if (total <= 0) return 0;
@@ -384,13 +343,7 @@ function scoreToNota(score, totalPoints) {
   return Math.round(raw * 10) / 10;
 }
 
-/* ---------- nota en escala de 1 a 10 — fórmula NUEVA (con curva) ----------
-   60% del puntaje total = nota 4. De ahí para abajo es lineal (0% = nota 0).
-   De ahí para arriba (60%-100%) es una curva logarítmica hasta nota 10: sube
-   rápido apenas se pasa el 60%, y después cuesta cada vez más acercarse al 10.
-   Se usa SOLO para respuestas nuevas, calculada y GUARDADA en el momento
-   exacto del envío — así queda fija para siempre, pase lo que pase después
-   con la fórmula. */
+/* ---------- nota en escala de 1 a 10 — fórmula NUEVA (con curva) ---------- */
 function scoreToNotaCurva(score, totalPoints) {
   const total = Number(totalPoints) || 0;
   if (total <= 0) return 0;
@@ -399,7 +352,7 @@ function scoreToNotaCurva(score, totalPoints) {
   if (pct <= 0.6) {
     nota = (pct / 0.6) * 4;
   } else {
-    const x = (pct - 0.6) / 0.4; // 0..1 dentro del tramo 60%-100%
+    const x = (pct - 0.6) / 0.4;
     const k = 9;
     nota = 4 + 6 * (Math.log(1 + k * x) / Math.log(1 + k));
   }
@@ -416,11 +369,6 @@ function formatNotaCurva(score, totalPoints) {
   return formatNotaValue(scoreToNotaCurva(score, totalPoints));
 }
 
-/* Decide qué nota mostrar para una fila/parcial ya guardado: si tiene una
-   nota guardada (respuestas nuevas, con la curva), se usa esa tal cual quedó
-   fijada en su momento. Si no la tiene (respuestas de antes de este cambio),
-   se calcula con la fórmula vieja lineal — para que no se modifique nada de
-   lo que ya existe. */
 function resolveNota(row) {
   if (row && row.nota !== null && row.nota !== undefined && row.nota !== "") return Number(row.nota);
   return scoreToNota(row ? row.score : 0, row ? row.totalPoints : 0);
@@ -430,13 +378,7 @@ function formatResolvedNota(row) {
   return formatNotaValue(resolveNota(row));
 }
 
-/* ---------- iniciales de cada parcialito, para el libro de notas ----------
-   Con muchos parcialitos (16+) el nombre completo en cada columna obliga a
-   correr la pantalla para el costado. formInitials() toma la primera letra
-   de cada palabra del título ("Parcialito Nro 0" -> "PN0"). Si dos títulos
-   distintos dan las mismas iniciales, computeFormInitialsMap() les agrega un
-   número al final para no confundirlos. El título completo sigue disponible
-   como tooltip (atributo title) en la celda. */
+/* ---------- iniciales de cada parcialito, para el libro de notas ---------- */
 function formInitials(title) {
   const clean = String(title || "").trim();
   if (!clean) return "?";
@@ -455,20 +397,33 @@ function computeFormInitialsMap(forms) {
   return map;
 }
 
-/* ---------- "Confirmar asistencia" (el alumno escaneó, confirmó que está en
-   clase, pero eligió no rendir) ----------
-   Esa fila queda guardada en Respuestas sin puntaje/nota, marcada con
-   asistenciaSinRendir=1. En las tablas se ve como un casillero VACÍO pero
-   pintado de verde (asistió), distinto de una falta (ni siquiera escaneó) y
-   distinto de una nota real (aprobada o desaprobada). */
+/* ---------- orden fijo de las columnas del libro de notas ----------
+   Se ordena por las INICIALES que se ven en cada columna. Lo que no esté
+   en esta lista (ej: un parcialito nuevo) va después de los listados, y el
+   "1PA" (1er Parcial Asistido) siempre queda último, pegado al Total.
+   Para agregar uno nuevo (ej: PLN16), sumalo a la lista en su lugar. */
+const ORDEN_COLUMNAS_NOTAS = [
+  "PLN1", "PLN2", "PLN3", "PLN4", "PLN5", "PLN6", "PLN62",
+  "PLN7", "PLN8", "PLN9",
+  "PLN11", "PLN12", "PLN13", "PLN14", "PLN15",
+];
+const COLUMNA_ULTIMA_NOTAS = "1PA";
+
+function ordenarFormsParaNotas(forms, initialsMap) {
+  const rank = (f) => {
+    const ini = initialsMap[f.id];
+    if (ini === COLUMNA_ULTIMA_NOTAS) return 100000;
+    const i = ORDEN_COLUMNAS_NOTAS.indexOf(ini);
+    return i === -1 ? 50000 : i;
+  };
+  return (forms || []).slice().sort((a, b) => rank(a) - rank(b));
+}
+
+/* ---------- "Confirmar asistencia" ---------- */
 function isAttendanceOnly(row) {
   return !!(row && (row.asistenciaSinRendir === true || row.asistenciaSinRendir === 1 || row.asistenciaSinRendir === "1"));
 }
 
-/* Decide qué clase de color usar para el "score-pill" de una nota: si es
-   una asistencia sin rendir, siempre verde (vacío). Si el profesor la forzó
-   a mano (colorManual: "verde"/"rojo"), se respeta esa decisión pase lo que
-   pase con el puntaje. Si no, se calcula solo con el 60% de siempre. */
 function resolveColorClass(row) {
   if (isAttendanceOnly(row)) return "high";
   if (row && row.colorManual === "verde") return "high";
@@ -477,10 +432,6 @@ function resolveColorClass(row) {
   return pct >= 0.6 ? "high" : "low";
 }
 
-/* Escala de colores para cambios de pantalla: cuantos más, más fuerte el
-   color — de neutro, a amarillo (leve), a naranja (moderado), a rojo intenso
-   (grave). Los cortes (2 / 5) son un default razonable; si el profesor
-   quiere otros números, se cambian acá nomás. */
 function tabSwitchInfo(n) {
   const count = Number(n) || 0;
   if (count === 0) return { level: 0, label: "Sin salidas de pantalla", className: "tabswitch-pill level-0" };
@@ -489,12 +440,6 @@ function tabSwitchInfo(n) {
   return { level: 3, label: "Grave", className: "tabswitch-pill level-3" };
 }
 
-/* Cuántos parcialitos de TODOS los que existen un alumno no rindió — se
-   considera falta cualquier parcialito para el que no haya una respuesta
-   suya, sin importar el motivo. Reutiliza la misma escala visual de colores
-   que los cambios de pantalla (más faltas, más fuerte el color), pero acá
-   el corte es por PROPORCIÓN sobre el total de parcialitos, no un número fijo,
-   porque no es lo mismo faltar a 1 de 3 que a 1 de 12. */
 function faltasInfo(faltas, totalForms) {
   const total = Number(totalForms) || 0;
   const count = Number(faltas) || 0;
@@ -505,11 +450,7 @@ function faltasInfo(faltas, totalForms) {
   return { level: 3, label: "Grave", className: "faltas-pill level-3" };
 }
 
-/* ---------- mismos colores, pero para el Excel exportado ----------
-   Requiere la librería xlsx-js-style (no la xlsx común, que no puede escribir
-   colores de fondo). Repite EXACTAMENTE la misma paleta que la app: verde/rojo
-   para notas, azules para cambios de pantalla, violetas para faltas — así el
-   Excel se ve igual que la pantalla. */
+/* ---------- mismos colores, pero para el Excel exportado ---------- */
 function xlsxNotaStyle(aprobado) {
   return aprobado
     ? { fill: { fgColor: { rgb: "DCF5EA" } }, font: { color: { rgb: "0F8A5F" }, bold: true } }
