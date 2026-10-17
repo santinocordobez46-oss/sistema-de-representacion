@@ -412,10 +412,14 @@ function sortFormsByOrden(forms, fallbackCmp) {
   const sin = list.filter((f) => f.orden === undefined || f.orden === null || f.orden === "");
   if (fallbackCmp) sin.sort(fallbackCmp);
   return [...con, ...sin];
-}
-// Se mantiene el nombre para que notas.js y notas-publicas.js no cambien.
+// Las columnas van al revés del panel: la primera tarjeta del panel es la última columna.
+// Los parcialitos nuevos (sin orden todavía) quedan al final, a la derecha.
 function ordenarFormsParaNotas(forms, initialsMap) {
-  return sortFormsByOrden(forms, null); // sin orden propio, queda el de creación que manda el servidor
+  const list = (forms || []).slice();
+  const tieneOrden = (f) => f.orden !== undefined && f.orden !== null && f.orden !== "";
+  const con = list.filter(tieneOrden).sort((a, b) => Number(b.orden) - Number(a.orden));
+  const sin = list.filter((f) => !tieneOrden(f));
+  return [...con, ...sin];
 }
 
 /* ---------- "Confirmar asistencia" ---------- */
